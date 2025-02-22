@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/cpp:1-debian-12
 HEALTHCHECK NONE
 
-ARG DEBIAN_FRONTEND=noninteractive
+ARG DEBIAN_FRONTEND="noninteractive"
 ARG REINSTALL_CMAKE_VERSION_FROM_SOURCE="none"
 ARG PERSISTENCE_DIR="/persistence"
 ARG BASH_HISTORY="${PERSISTENCE_DIR}/.bash_history"
