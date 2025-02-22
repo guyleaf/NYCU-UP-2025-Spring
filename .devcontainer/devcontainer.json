@@ -14,7 +14,10 @@
   "capAdd": ["SYS_ADMIN", "NET_ADMIN", "DAC_READ_SEARCH"],
   "updateContentCommand": "trunk install --ci",
   // Use 'postCreateCommand' to run commands after the container is created.
-  "postCreateCommand": "gcc -v && printf '\n' && g++ -v && printf '\n' && clang++ -v",
+  "postCreateCommand": {
+    "List compiler versions": "gcc -v && printf '\n' && g++ -v && printf '\n' && clang++ -v",
+    "Remove .trunk symbolic links": "rm -f .trunk/tools .trunk/logs .trunk/notifications .trunk/out && trunk --version"
+  },
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   // "remoteUser": "root"
   "mounts": [
