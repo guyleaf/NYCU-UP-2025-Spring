@@ -1,0 +1,24 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "Linux-pre-lab2",
+      "compilerPath": "/usr/bin/gcc",
+      // "compilerArgs": [],
+      "intelliSenseMode": "linux-gcc-x64",
+      // if it still have some missings, you can check the comment, https://github.com/microsoft/vscode-cpptools/issues/5588#issuecomment-662116156.
+      "includePath": [
+        "${workspaceFolder}/pre-lab2/vm/dist/modulebuild/include",
+        "${workspaceFolder}/pre-lab2/vm/dist/modulebuild/include/generated",
+        "${workspaceFolder}/pre-lab2/vm/dist/modulebuild/arch/x86/include",
+        "${workspaceFolder}/pre-lab2/vm/dist/modulebuild/arch/x86/include/generated"
+      ],
+      "defines": ["__KERNEL__", "MODULE"],
+      "cStandard": "gnu11",
+      "mergeConfigurations": true,
+      "browse": {
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ]
+}
