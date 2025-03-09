@@ -16,6 +16,7 @@
 #include <linux/slab.h>  // for kmalloc/kfree
 #include <linux/string.h>
 #include <linux/uaccess.h>  // copy_to_user
+#include <linux/crypto.h>
 
 static dev_t devnum;
 static struct cdev c_dev;
@@ -23,27 +24,39 @@ static struct class *clazz;
 
 static int hellomod_dev_open(struct inode *i, struct file *f)
 {
-    printk(KERN_INFO "hellomod: device opened.\n");
+    pr_info("hellomod: device opened.\n");
     return 0;
 }
 
 static int hellomod_dev_close(struct inode *i, struct file *f)
 {
-    printk(KERN_INFO "hellomod: device closed.\n");
+    pr_info("hellomod: device closed.\n");
     return 0;
 }
 
 static ssize_t hellomod_dev_read(struct file *f, char __user *buf, size_t len,
                                  loff_t *off)
 {
-    printk(KERN_INFO "hellomod: read %zu bytes @ %llu.\n", len, *off);
+    pr_info("hellomod: read %zu bytes @ %llu.\n", len, *off);
+    if (copy_to_user(buf, "2123", 5))
+    {
+        return -EFAULT;
+    }
     return len;
 }
 
 static ssize_t hellomod_dev_write(struct file *f, const char __user *buf,
                                   size_t len, loff_t *off)
 {
-    printk(KERN_INFO "hellomod: write %zu bytes @ %llu.\n", len, *off);
+    char *kern_buf = kzalloc(len, GFP_KERNEL);
+    if (copy_from_user(kern_buf, buf, len))
+    {
+        return -EFAULT;
+    }
+    pr_info("hellomod: write %zu bytes @ %llu.\n", len, *off);
+    pr_info("hellomod: buffer %s.\n", kern_buf);
+    kvfree(kern_buf);
+    kern_buf = NULL;
     return len;
 }
 
@@ -84,6 +97,7 @@ static const struct proc_ops hellomod_proc_fops = {
 static char *hellomod_devnode(const struct device *dev, umode_t *mode)
 {
     if (mode == NULL) return NULL;
+    // 0xxx <- number in octal format
     *mode = 0666;
     return NULL;
 }

@@ -18,6 +18,7 @@ int main()
     }
 
     read(fd, buf, sizeof(buf));
+    printf("hello: %s\n", buf);
     write(fd, buf, sizeof(buf));
     ioctl(fd, 0x1234);
     ioctl(fd, 0x5678, 0xabcd);
