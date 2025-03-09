@@ -80,7 +80,9 @@
 			"slab.h": "c",
 			"uaccess.h": "c",
 			"unistd.h": "c",
-			"cdev.h": "c"
+			"cdev.h": "c",
+			"device.h": "c",
+			"crypto.h": "c"
 		}
 	}
 }
