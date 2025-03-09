@@ -23,7 +23,8 @@
   "mounts": [
     "source=${devcontainerId}-persistence,target=/persistence,type=volume",
     "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/data/NYCU-UP-2025-Spring,target=/data,type=bind,consistency=cached"
   ],
   // Configure tool-specific properties.
   "customizations": {

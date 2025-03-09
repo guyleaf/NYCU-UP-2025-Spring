@@ -39,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends locales \
 	libssl-dev:amd64 libpcre2-dev:amd64 zlib1g-dev:amd64 \
 	libssl-dev:arm64 libpcre2-dev:arm64 zlib1g-dev:arm64 \
 	libssl-dev:i386 libpcre2-dev:i386 zlib1g-dev:i386 \
-	qemu-user-static ninja-build \
+	qemu-user-static qemu-system-x86 ninja-build cpio \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
