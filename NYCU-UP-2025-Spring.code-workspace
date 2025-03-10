@@ -82,7 +82,11 @@
 			"unistd.h": "c",
 			"cdev.h": "c",
 			"device.h": "c",
-			"crypto.h": "c"
+			"crypto.h": "c",
+			"seq_file.h": "c",
+			"cred.h": "c",
+			"cryptomod.h": "c",
+			"string.h": "c"
 		}
 	}
 }
