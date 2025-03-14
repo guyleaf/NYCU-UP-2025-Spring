@@ -24,9 +24,9 @@
 #define MAX_DATA_SIZE 1024
 
 struct Counter {
-    unsigned long read_bytes;
-    unsigned long write_bytes;
-    unsigned long frequency[256];
+    size_t read_bytes;
+    size_t write_bytes;
+    size_t frequency[256];
 };
 
 struct PrivateData {
@@ -38,15 +38,20 @@ struct PrivateData {
     char *key;
     int key_len;
     char *input_data;
+    // size_t input_data_offset;
     size_t input_data_len;
     char *output_data;
+    size_t output_data_offset;
     size_t output_data_len;
 };
 
 static dev_t devnum;
 static struct cdev c_dev;
 static struct class *clazz;
+
 static struct Counter counter = {0};
+DEFINE_MUTEX(write_lock);
+DEFINE_MUTEX(read_lock);
 
 static void cryptomod_dev_free_private_data(struct PrivateData **privp)
 {
@@ -110,7 +115,7 @@ static long cryptomod_dev_crypto_operation(
      *
      */
     sg_init_one(&input_sg, input_data, data_len); // You need to make sure that data size is mutiple of block size
-    sg_init_one(&output_sg, input_data, data_len);
+    sg_init_one(&output_sg, output_data, data_len);
     skcipher_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG |
                                        CRYPTO_TFM_REQ_MAY_SLEEP,
                                   crypto_req_done, &wait);
@@ -232,22 +237,33 @@ static ssize_t cryptomod_dev_read(struct file *fp, char __user *buf, size_t len,
         return -EINVAL;
     }
 
-    // act like a sequential file
-    loff_t offset = *off - priv->output_data_len;
-    long long diff = min((long long)priv->output_data_len - offset, (long long)len);
-    size_t read_len = diff;
-    if (diff <= 0)
+    size_t offset = priv->output_data_offset;
+    size_t read_len = umin(priv->output_data_len - offset, len);
+    if (read_len == 0)
     {
         return priv->finalized ? 0 : -EAGAIN;
     }
 
-    if (copy_to_user(buf, priv->output_data + offset, read_len))
+    char *data = priv->output_data + offset;
+    if (copy_to_user(buf, data, read_len))
     {
         return -EBUSY;
     }
-    *off += read_len;
+    priv->output_data_offset += read_len;
 
-    pr_info("cryptomod: read %zu bytes @ %llu.\n", len, offset);
+    pr_info("cryptomod: read %zu/%zu bytes @ %zu.\n", read_len, len, offset);
+    mutex_lock(&read_lock);
+    counter.read_bytes += read_len;
+    mutex_unlock(&read_lock);
+    if (priv->c_mode == ENC)
+    {
+        mutex_lock(&read_lock);
+        for (size_t i = 0; i < read_len; i++)
+        {
+            counter.frequency[(size_t)*(data + i)] += 1;
+        }
+        mutex_unlock(&read_lock);
+    }
     return read_len;
 }
 
@@ -260,21 +276,23 @@ static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
         return -EINVAL;
     }
 
-    long long diff = min(MAX_DATA_SIZE - *off, (long long)len);
-    size_t write_len = diff;
-    if (diff <= 0)
+    size_t offset = priv->input_data_len;
+    size_t write_len = umin(MAX_DATA_SIZE - offset, len);
+    if (write_len == 0)
     {
         return -EAGAIN;
     }
 
-    if (copy_from_user(priv->input_data + *off, buf, write_len))
+    if (copy_from_user(priv->input_data + offset, buf, write_len))
     {
         return -EBUSY;
     }
     priv->input_data_len += write_len;
-    *off += write_len;
 
-    pr_info("cryptomod: write %zu/%zu bytes @ %llu.\n", write_len, len, *off);
+    pr_info("cryptomod: write %zu/%zu bytes @ %zu.\n", write_len, len, offset);
+    mutex_lock(&write_lock);
+    counter.write_bytes += write_len;
+    mutex_unlock(&write_lock);
     return write_len;
 }
 
@@ -314,8 +332,10 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
     // initialize data buffer with data size + a block size for padding
     // TODO: check menory allocation doc
     priv->input_data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
+    // priv->input_data_offset = 0;
     priv->input_data_len = 0;
     priv->output_data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
+    priv->output_data_offset = 0;
     priv->output_data_len = 0;
 
     fp->private_data = priv;
@@ -359,7 +379,9 @@ static long cryptomod_dev_ioctl_cleanup(struct file *fp)
     struct PrivateData *priv = (struct PrivateData *)fp->private_data;
     priv->finalized = false;
     // memset(priv->data, 0, MAX_DATA_SIZE + CM_BLOCK_SIZE);
+    // priv->input_data_offset = 0;
     priv->input_data_len = 0;
+    priv->output_data_offset = 0;
     priv->output_data_len = 0;
     return 0;
 }
