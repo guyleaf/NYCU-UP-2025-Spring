@@ -17,6 +17,7 @@
 #include <linux/uaccess.h>  // copy_to_user
 #include <crypto/skcipher.h>
 #include <linux/scatterlist.h>
+#include <linux/minmax.h> // min
 
 #include "cryptomod.h"
 
@@ -36,8 +37,10 @@ struct PrivateData {
 
     char *key;
     int key_len;
-    char *data;
-    size_t data_len;
+    char *input_data;
+    size_t input_data_len;
+    char *output_data;
+    size_t output_data_len;
 };
 
 static dev_t devnum;
@@ -45,11 +48,25 @@ static struct cdev c_dev;
 static struct class *clazz;
 static struct Counter counter;
 
-static long cryptomod_dev_crypto_operation(int (*operation)(struct skcipher_request *req), char *data, size_t data_len, char *key, size_t key_len)
+static void cryptomod_dev_free_private_data(struct PrivateData **privp)
+{
+    struct PrivateData *priv = *privp;
+    kfree(priv->key);
+    kfree(priv->input_data);
+    kfree(priv->output_data);
+    kfree(priv);
+    *privp = NULL;
+}
+
+static long cryptomod_dev_crypto_operation(
+    int (*operation)(struct skcipher_request *req),
+    char *input_data, char *output_data, size_t data_len,
+    char *key, size_t key_len
+)
 {
     struct crypto_skcipher *tfm = NULL;
     struct skcipher_request *req = NULL;
-    struct scatterlist sg;
+    struct scatterlist input_sg, output_sg;
     DECLARE_CRYPTO_WAIT(wait);
     int err;
 
@@ -76,54 +93,115 @@ static long cryptomod_dev_crypto_operation(int (*operation)(struct skcipher_requ
     req = skcipher_request_alloc(tfm, GFP_KERNEL);
     if (!req) {
         err = -ENOMEM;
+        pr_err("Error allocating request: %d\n", err);
         goto out;
     }
 
     /*
-     * Encrypt the data in-place.
+     * Encrypt the data.
      *
      * For simplicity, in this example we wait for the request to complete
      * before proceeding, even if the underlying implementation is asynchronous.
      *
-     * To decrypt instead of encrypt, just change crypto_skcipher_encrypt() to
-     * crypto_skcipher_decrypt().
      */
-    /* you also can init two scatterlists instead of inplace operation */
-    sg_init_one(&sg, data, data_len); // You need to make sure that data size is mutiple of block size
+    sg_init_one(&input_sg, input_data, data_len); // You need to make sure that data size is mutiple of block size
+    sg_init_one(&output_sg, input_data, data_len);
     skcipher_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG |
                                        CRYPTO_TFM_REQ_MAY_SLEEP,
                                   crypto_req_done, &wait);
-    skcipher_request_set_crypt(req, &sg, &sg, data_len, NULL);
+    skcipher_request_set_crypt(req, &input_sg, &output_sg, data_len, NULL);
     err = crypto_wait_req(operation(req), &wait);
     if (err) {
-        pr_err("Error encrypting data: %d\n", err);
+        pr_err("Error encrypting/decrypting data: %d\n", err);
         goto out;
     }
 
-    pr_debug("Encryption was successful\n");
+    pr_info("Encryption/Decryption was successful\n");
 out:
-    crypto_free_skcipher(tfm);
     skcipher_request_free(req);
+    crypto_free_skcipher(tfm);
     return err;
 }
 
 static long cryptomod_dev_crypto_encrypt(struct PrivateData *priv)
 {
-    // TODO: apply padding (encryption)
+    size_t data_len = priv->input_data_len;
+
+    // apply padding (encryption)
     // 1. if it is not a multiple of CM_BLOCK_SIZE, add paddings.
     // Pad with a value equal to the total number of padding bytes added
-
     // 2. if it is a multiple of CM_BLOCK_SIZE, add an entire block of padding.
     // Pad with a value equal to CM_BLOCK_SIZE
+    size_t num_paddings = CM_BLOCK_SIZE - (data_len % CM_BLOCK_SIZE);
+    memset(priv->input_data + data_len, num_paddings, num_paddings);
+    data_len += num_paddings;
 
-    // TODO: perform encryption
+    // encrypt the data
+    long error = cryptomod_dev_crypto_operation(
+        crypto_skcipher_encrypt,
+        priv->input_data,
+        priv->output_data,
+        data_len,
+        priv->key,
+        priv->key_len
+    );
+    if (error)
+    {
+        return error;
+    }
+
+    // update the length of data buffers
+    priv->output_data_len = data_len;
+    priv->input_data_len = 0;
     return 0;
 }
 
 static long cryptomod_dev_crypto_decrypt(struct PrivateData *priv)
 {
-    // TODO: remove padding (decryption)
-    // TODO: perform decryption
+    size_t data_len = priv->input_data_len;
+    // validate the data size is a multiple of CM_BLOCK_SIZE
+    if (data_len % CM_BLOCK_SIZE != 0)
+    {
+        pr_err("Error decrypting data: the data size is not a multiple of block size\n");
+        return -EINVAL;
+    }
+
+    // decrypt the data
+    long error = cryptomod_dev_crypto_operation(
+        crypto_skcipher_decrypt,
+        priv->input_data,
+        priv->output_data,
+        data_len,
+        priv->key,
+        priv->key_len
+    );
+    if (error)
+    {
+        return error;
+    }
+
+    // validate paddings
+    size_t num_paddings = priv->output_data[data_len - 1];
+    if (num_paddings > CM_BLOCK_SIZE)
+    {
+        pr_err("Error validating paddings: number of paddings is invalid.\n");
+        return -EINVAL;
+    }
+    for (size_t i = 2; i <= num_paddings; i++)
+    {
+        if (priv->output_data[data_len - i] != num_paddings)
+        {
+            pr_err("Error validating paddings: padding is mismatched.\n");
+            return -EINVAL;
+        }
+    }
+
+    // remove paddings (decryption)
+    data_len -= num_paddings;
+
+    // update the length of data buffers
+    priv->output_data_len = data_len;
+    priv->input_data_len = 0;
     return 0;
 }
 
@@ -155,26 +233,21 @@ static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
         return -EINVAL;
     }
 
-    size_t left_data_size = (MAX_DATA_SIZE - priv->data_len);
-    size_t processed_len = left_data_size > len ? len : left_data_size;
-
+    // FIXME: possible precision error handling long long vs. unsigned long
+    size_t processed_len = umin(MAX_DATA_SIZE - *off, len);
     if (processed_len == 0)
     {
         return -EAGAIN;
     }
 
-    char *data = kmalloc(processed_len, GFP_KERNEL);
-    if (copy_from_user(data, buf, processed_len))
+    pr_info("cryptomod: write %zu/%zu bytes @ %llu.\n", processed_len, len, *off);
+
+    if (copy_from_user(priv->input_data + *off, buf, processed_len))
     {
         return -EBUSY;
     }
-
-    pr_info("cryptomod: write %zu bytes @ %llu.\n", len, *off);
-
-    memmove(priv->data + priv->data_len, data, processed_len);
-    priv->data_len += processed_len;
-
-    kfree(data);
+    priv->input_data_len += processed_len;
+    *off += processed_len;
     return processed_len;
 }
 
@@ -196,35 +269,33 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
     {
         return -EINVAL;
     }
-    
-    // store configurations
+
+    // release previous data if exists
+    cryptomod_dev_free_private_data(&fp->private_data);
+
+    // save configurations
     struct PrivateData *priv = kmalloc(sizeof(struct PrivateData), GFP_KERNEL);
     priv->finalized = false;
-    priv->key = kmalloc(setup.key_len, GFP_KERNEL);
-    if (copy_from_user(priv->key, setup.key, setup.key_len))
-    {
-        return -EBUSY;
-    }
-    priv->key_len = setup.key_len;
     priv->c_mode = setup.c_mode;
     priv->io_mode = setup.io_mode;
 
+    // copy key from user-space buffer
+    priv->key = kmalloc(setup.key_len, GFP_KERNEL);
+    if (copy_from_user(priv->key, setup.key, setup.key_len))
+    {
+        cryptomod_dev_free_private_data(&priv);
+        return -EBUSY;
+    }
+    priv->key_len = setup.key_len;
+
     // initialize data buffer with data size + a block size for padding
     // TODO: check menory allocation doc
-    priv->data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
-    priv->data_len = 0;
+    priv->input_data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
+    priv->input_data_len = 0;
+    priv->output_data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
+    priv->output_data_len = 0;
 
-    // store private data
-    if (fp->private_data != NULL)
-    {
-        struct PrivateData *old_priv = (struct PrivateData *)fp->private_data;
-        kfree(old_priv->key);
-        kfree(old_priv->data);
-        kfree(old_priv);
-        fp->private_data = NULL;
-    }
     fp->private_data = priv;
-
     return 0;
 }
 
@@ -236,7 +307,7 @@ static long cryptomod_dev_ioctl_finalize(struct file *fp)
         return -EINVAL;
     }
 
-    long status = 0;
+    long status;
     switch (priv->c_mode)
     {
     case ENC:
@@ -264,8 +335,9 @@ static long cryptomod_dev_ioctl_cleanup(struct file *fp)
 
     struct PrivateData *priv = (struct PrivateData *)fp->private_data;
     priv->finalized = false;
-    memset(priv->data, 0, sizeof(priv->data));
-    priv->data_len = 0;
+    // memset(priv->data, 0, MAX_DATA_SIZE + CM_BLOCK_SIZE);
+    priv->input_data_len = 0;
+    priv->output_data_len = 0;
     return 0;
 }
 
