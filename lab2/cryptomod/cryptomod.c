@@ -46,11 +46,16 @@ struct PrivateData {
 static dev_t devnum;
 static struct cdev c_dev;
 static struct class *clazz;
-static struct Counter counter;
+static struct Counter counter = {0};
 
 static void cryptomod_dev_free_private_data(struct PrivateData **privp)
 {
     struct PrivateData *priv = *privp;
+    if (priv == NULL)
+    {
+        return;
+    }
+
     kfree(priv->key);
     kfree(priv->input_data);
     kfree(priv->output_data);
@@ -213,6 +218,7 @@ static int cryptomod_dev_open(struct inode *i, struct file *f)
 
 static int cryptomod_dev_close(struct inode *i, struct file *f)
 {
+    cryptomod_dev_free_private_data((struct PrivateData **)&f->private_data);
     pr_info("cryptomod: device closed.\n");
     return 0;
 }
@@ -220,8 +226,29 @@ static int cryptomod_dev_close(struct inode *i, struct file *f)
 static ssize_t cryptomod_dev_read(struct file *fp, char __user *buf, size_t len,
                                  loff_t *off)
 {
-    pr_info("cryptomod: read %zu bytes @ %llu.\n", len, *off);
-    return len;
+    struct PrivateData *priv = (struct PrivateData *)fp->private_data;
+    if (priv == NULL)
+    {
+        return -EINVAL;
+    }
+
+    // act like a sequential file
+    loff_t offset = *off - priv->output_data_len;
+    long long diff = min((long long)priv->output_data_len - offset, (long long)len);
+    size_t read_len = diff;
+    if (diff <= 0)
+    {
+        return priv->finalized ? 0 : -EAGAIN;
+    }
+
+    if (copy_to_user(buf, priv->output_data + offset, read_len))
+    {
+        return -EBUSY;
+    }
+    *off += read_len;
+
+    pr_info("cryptomod: read %zu bytes @ %llu.\n", len, offset);
+    return read_len;
 }
 
 static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
@@ -233,22 +260,22 @@ static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
         return -EINVAL;
     }
 
-    // FIXME: possible precision error handling long long vs. unsigned long
-    size_t processed_len = umin(MAX_DATA_SIZE - *off, len);
-    if (processed_len == 0)
+    long long diff = min(MAX_DATA_SIZE - *off, (long long)len);
+    size_t write_len = diff;
+    if (diff <= 0)
     {
         return -EAGAIN;
     }
 
-    pr_info("cryptomod: write %zu/%zu bytes @ %llu.\n", processed_len, len, *off);
-
-    if (copy_from_user(priv->input_data + *off, buf, processed_len))
+    if (copy_from_user(priv->input_data + *off, buf, write_len))
     {
         return -EBUSY;
     }
-    priv->input_data_len += processed_len;
-    *off += processed_len;
-    return processed_len;
+    priv->input_data_len += write_len;
+    *off += write_len;
+
+    pr_info("cryptomod: write %zu/%zu bytes @ %llu.\n", write_len, len, *off);
+    return write_len;
 }
 
 static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
@@ -271,7 +298,7 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
     }
 
     // release previous data if exists
-    cryptomod_dev_free_private_data(&fp->private_data);
+    cryptomod_dev_free_private_data((struct PrivateData **)&fp->private_data);
 
     // save configurations
     struct PrivateData *priv = kmalloc(sizeof(struct PrivateData), GFP_KERNEL);
@@ -281,11 +308,7 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
 
     // copy key from user-space buffer
     priv->key = kmalloc(setup.key_len, GFP_KERNEL);
-    if (copy_from_user(priv->key, setup.key, setup.key_len))
-    {
-        cryptomod_dev_free_private_data(&priv);
-        return -EBUSY;
-    }
+    memmove(priv->key, setup.key, setup.key_len);
     priv->key_len = setup.key_len;
 
     // initialize data buffer with data size + a block size for padding
@@ -358,15 +381,19 @@ static long cryptomod_dev_ioctl(struct file *fp, unsigned int cmd,
     switch (cmd)
     {
     case CM_IOC_SETUP:
+        pr_info("cryptomod: CM_IOC_SETUP\n");
         status = cryptomod_dev_ioctl_setup(fp, (struct CryptoSetup *)arg);
         break;
     case CM_IOC_FINALIZE:
+        pr_info("cryptomod: CM_IOC_FINALIZE\n");
         status = cryptomod_dev_ioctl_finalize(fp);
         break;
     case CM_IOC_CLEANUP:
+        pr_info("cryptomod: CM_IOC_CLEANUP\n");
         status = cryptomod_dev_ioctl_cleanup(fp);
         break;
     case CM_IOC_CNT_RST:
+        pr_info("cryptomod: CM_IOC_CNT_RST\n");
         status = cryptomod_dev_ioctl_cnt_reset();
         break;
     default:
