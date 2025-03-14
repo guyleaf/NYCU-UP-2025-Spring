@@ -1,10 +1,8 @@
-# UP25 Lab02
+# UP25 Lab02 - Cryptomod: Encrypt and Decrypt Data Using a Kernel Module
 
 Date: 2024-03-10
 
 [TOC]
-
-# Cryptomod: Encrypt and Decrypt Data Using a Kernel Module
 
 In this lab, you will implement a kernel module that performs encryption and decryption operations using the Linux Kernel API. The kernel module should be configured using the `ioctl` interface and provide information through the `proc` file system.
 
@@ -78,17 +76,26 @@ The specification of the kernel module is summarized as follows.
     <a id="CM_IOC_SETUP"></a>
 
     - `CM_IOC_SETUP`: Configures the encryption/decryption settings. The configuration is provided as a pointer to a `CryptoSetup` structure. - Note that the AES standard supports only specific key lengths.
-      | AES Variant | AES-128 | AES-192 | AES-256 |
+
+      | AES Variant        | AES-128 | AES-192 | AES-256 |
       | ------------------ | ------- | ------- | ------- |
-      | Key Length (bytes) | 16 | 24 | 32 | - If the device is reconfigured, all buffers must be cleared, and the new configuration must be applied.
-      Possible error codes: - `-EINVAL`: Returned if any argument is invalid or a null pointer is passed. - `-EBUSY`: Returned if copying data between user space and kernel space fails.
+      | Key Length (bytes) | 16      | 24      | 32      |
+
+    - If the device is reconfigured, all buffers must be cleared, and the new configuration must be applied.
+
+      Possible error codes:
+
+      - `-EINVAL`: Returned if any argument is invalid or a null pointer is passed.
+      - `-EBUSY`: Returned if copying data between user space and kernel space fails.
+
       <a id="CM_IOC_FINALIZE"></a>
+
     - `CM_IOC_FINALIZE`: Applies padding using the `PKCS#7` padding method. In `ENC` mode, the kernel module should add padding to the plaintext before encryption. In `DEC` mode, the kernel module should validate and remove the padding during decryption.
 
       Padding method described below:
 
       - Each padding byte has a value equal to the total number of padding bytes added. For example, if 4 padding bytes are needed, each byte will have the value `0x04`:
-        ```
+        ```text
         Plaintext:     | DD DD DD DD DD DD DD DD DD DD DD DD xx xx xx xx |
         After padding: | DD DD DD DD DD DD DD DD DD DD DD DD 04 04 04 04 |
         ```
@@ -111,7 +118,7 @@ The specification of the kernel module is summarized as follows.
 
     - First Row:
 
-      ```
+      ```text
       <total bytes read by user programs> <total bytes written by user programs>
       ```
 
@@ -125,7 +132,7 @@ The specification of the kernel module is summarized as follows.
 
     - Example Output:
 
-      ```
+      ```text
       2160 2121
        9 13  7 13  4 10 10  7  7  7 11  6 11  7  6  9
        9  9  5 13  6 10  8  8 11  3 14 12 14  7  5 12
@@ -192,7 +199,7 @@ Here are some hints for you.
 
 1. We have provided a test program, `test_crypto`, to validate your module. This program includes seven test cases, identified by numbers ranging from 0 to 6.
    - The usage of `test_crypto` is as follows:
-     ```
+     ```text
      Usage: test_crypto test <num>
        or:  test_crypto enc -i INPUT -o OUTPUT -k KEY (hex, 32/48/64 chars) -s SIZE -m BASIC|ADV
        or:  test_crypto dec -i INPUT -o OUTPUT -k KEY (hex, 32/48/64 chars) -s SIZE -m BASIC|ADV
@@ -200,11 +207,11 @@ Here are some hints for you.
      - The key must be provided in hexadecimal format and must have a valid length.
    - Examples:
      - Run testcase
-       ```
+       ```sh
        ./test_crypto test 0
        ```
      - Decrypting a file with an I/O size of 128 in `ADV` mode:
-       `     ./test_crypto dec -i fun.jpg.enc -o fun.jpg -k "e381aae38293e381a7e698a5e697a5e5bdb1e38284e381a3e3819fe381ae213f" -s 128 -m ADV`
+       `./test_crypto dec -i fun.jpg.enc -o fun.jpg -k "e381aae38293e381a7e698a5e697a5e5bdb1e38284e381a3e3819fe381ae213f" -s 128 -m ADV`
        The program can be downloaded from [here (test_crypto)](https://up.zoolab.org/unixprog/lab02/test_crypto).
    - You can generate test data yourself using `openssl`:
      ```bash
@@ -226,7 +233,7 @@ The last demo time is 3/31 15:10.
 1. [10 pts] Your kernel module can pass test 0 for `/proc/cryptomod` initial state check:
    Example output
 
-   ```
+   ```text
    0 0
    0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
    0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
