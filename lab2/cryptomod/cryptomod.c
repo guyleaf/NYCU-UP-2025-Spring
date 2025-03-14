@@ -1,7 +1,6 @@
 /*
- * Lab problem set for UNIX programming course
- * by Chun-Ying Huang <chuang@cs.nctu.edu.tw>
- * License: GPLv2
+ * Lab 2 for UNIX programming course
+ * by Leaf Ying <leaf.ying.work@gmail.com>
  */
 #include <linux/cdev.h>
 #include <linux/cred.h>  // for current_uid();
@@ -37,7 +36,7 @@ struct PrivateData {
 
     char *key;
     int key_len;
-    char data[MAX_DATA_SIZE + CM_BLOCK_SIZE];
+    char *data;
     size_t data_len;
 };
 
@@ -210,8 +209,9 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
     priv->c_mode = setup.c_mode;
     priv->io_mode = setup.io_mode;
 
-    // initialize data buffer
-    memset(priv->data, 0, sizeof(priv->data));
+    // initialize data buffer with data size + a block size for padding
+    // TODO: check menory allocation doc
+    priv->data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
     priv->data_len = 0;
 
     // store private data
@@ -219,6 +219,7 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
     {
         struct PrivateData *old_priv = (struct PrivateData *)fp->private_data;
         kfree(old_priv->key);
+        kfree(old_priv->data);
         kfree(old_priv);
         fp->private_data = NULL;
     }
