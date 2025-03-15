@@ -21,7 +21,8 @@
 
 #include "cryptomod.h"
 
-#define MAX_DATA_SIZE 1024
+#define MAX_INPUT_DATA_SIZE 1024
+#define MAX_OUTPUT_DATA_SIZE (MAX_INPUT_DATA_SIZE + CM_BLOCK_SIZE)
 
 struct Counter {
     size_t read_bytes;
@@ -30,7 +31,6 @@ struct Counter {
 };
 
 struct PrivateData {
-    // struct crypto_cipher *tfm;
     bool finalized;
     enum CryptoMode c_mode;
     enum IOMode io_mode;
@@ -134,7 +134,7 @@ out:
 static long cryptomod_dev_crypto_encrypt(struct PrivateData *priv)
 {
     size_t data_len = priv->input_data_len;
-
+    size_t num_paddings = CM_BLOCK_SIZE - (data_len % CM_BLOCK_SIZE);
     if (priv->finalized)
     {
         // apply padding (encryption)
@@ -142,18 +142,33 @@ static long cryptomod_dev_crypto_encrypt(struct PrivateData *priv)
         // Pad with a value equal to the total number of padding bytes added
         // 2. if it is a multiple of CM_BLOCK_SIZE, add an entire block of padding.
         // Pad with a value equal to CM_BLOCK_SIZE
-        size_t num_paddings = CM_BLOCK_SIZE - (data_len % CM_BLOCK_SIZE);
+        // size_t num_paddings = CM_BLOCK_SIZE - (data_len % CM_BLOCK_SIZE);
         memset(priv->input_data + data_len, num_paddings, num_paddings);
+        priv->input_data_len += num_paddings;
         data_len += num_paddings;
     }
+    else
+    {
+        // only encrypt complete blocks
+        data_len -= (data_len % CM_BLOCK_SIZE);
+    }
 
-    // TODO: validate the data size is a multiple of CM_BLOCK_SIZE.
+    if ((priv->output_data_len + data_len) > MAX_OUTPUT_DATA_SIZE)
+    {
+        if (priv->finalized)
+        {
+            priv->input_data_len -= num_paddings;
+        }
+        pr_err("Error encrypting data: the output data buffer is full.\n");
+        return -ENOMEM;
+    }
 
     // encrypt the data
     long error = cryptomod_dev_crypto_operation(
         crypto_skcipher_encrypt,
         priv->input_data,
-        priv->output_data,
+        // the output data buffer may still have data.
+        priv->output_data + priv->output_data_len,
         data_len,
         priv->key,
         priv->key_len
@@ -164,26 +179,40 @@ static long cryptomod_dev_crypto_encrypt(struct PrivateData *priv)
     }
 
     // update the length of data buffers
-    priv->output_data_len = data_len;
-    priv->input_data_len = 0;
+    priv->input_data_len -= data_len;
+    priv->output_data_len += data_len;
+
+    // move the input data forward (may have overlap)
+    memmove(priv->input_data, priv->input_data + data_len, priv->input_data_len);
     return 0;
 }
 
 static long cryptomod_dev_crypto_decrypt(struct PrivateData *priv)
 {
     size_t data_len = priv->input_data_len;
-    // validate the data size is a multiple of CM_BLOCK_SIZE
+    if (!priv->finalized)
+    {
+        // only decrypt complete blocks
+        data_len -= (data_len % CM_BLOCK_SIZE);
+    }
+
     if (data_len % CM_BLOCK_SIZE != 0)
     {
-        pr_err("Error decrypting data: the data size is not a multiple of block size\n");
+        pr_err("Error decrypting data: the data size is not a multiple of block size.\n");
         return -EINVAL;
+    }
+    if ((priv->output_data_len + data_len) > MAX_OUTPUT_DATA_SIZE)
+    {
+        pr_err("Error decrypting data: the output data buffer is full.\n");
+        return -ENOMEM;
     }
 
     // decrypt the data
     long error = cryptomod_dev_crypto_operation(
         crypto_skcipher_decrypt,
         priv->input_data,
-        priv->output_data,
+        // the output data buffer may still have data.
+        priv->output_data + priv->output_data_len,
         data_len,
         priv->key,
         priv->key_len
@@ -194,31 +223,39 @@ static long cryptomod_dev_crypto_decrypt(struct PrivateData *priv)
     }
 
     // validate paddings
-    size_t num_paddings = priv->output_data[data_len - 1];
-    if (num_paddings > CM_BLOCK_SIZE)
+    size_t new_data_len = priv->output_data_len + data_len;
+    size_t num_paddings = priv->output_data[new_data_len - 1];
+    if (priv->finalized)
     {
-        pr_err("Error validating paddings: number of paddings is invalid.\n");
-        return -EINVAL;
-    }
-    for (size_t i = 2; i <= num_paddings; i++)
-    {
-        if (priv->output_data[data_len - i] != num_paddings)
+        if (num_paddings > CM_BLOCK_SIZE)
         {
-            pr_err("Error validating paddings: padding is mismatched.\n");
+            pr_err("Error validating paddings: padding is invalid.\n");
             return -EINVAL;
         }
+
+        // size_t num_paddings = priv->output_data[new_data_len - 1];
+        for (size_t i = 2; i <= num_paddings; i++)
+        {
+            if (priv->output_data[new_data_len - i] != num_paddings)
+            {
+                pr_err("Error validating paddings: padding is mismatched.\n");
+                return -EINVAL;
+            }
+        }
+        // remove paddings (decryption)
+        new_data_len -= num_paddings;
     }
 
-    // remove paddings (decryption)
-    data_len -= num_paddings;
-
     // update the length of data buffers
-    priv->output_data_len = data_len;
-    priv->input_data_len = 0;
+    priv->input_data_len -= data_len;
+    priv->output_data_len = new_data_len;
+
+    // move the input data forward (may have overlap)
+    memmove(priv->input_data, priv->input_data + data_len, priv->input_data_len);
     return 0;
 }
 
-static long cryptomod_dev_crypto(struct PrivateData *priv)
+static long cryptomod_dev_crypto_basic(struct PrivateData *priv)
 {
     long status;
     switch (priv->c_mode)
@@ -234,6 +271,44 @@ static long cryptomod_dev_crypto(struct PrivateData *priv)
         break;
     }
     return status;
+}
+
+static long cryptomod_dev_crypto_adv(struct PrivateData *priv)
+{
+    // due to decryption mode, we have to make sure there are at least two blocks.
+    if (priv->input_data_len < (CM_BLOCK_SIZE * 2))
+    {
+        return 0;
+    }
+
+    // if there is a complete block in input data buffer, perform encryption/decryption.
+    size_t original_data_len = priv->input_data_len;
+    size_t data_len = (original_data_len - (original_data_len % CM_BLOCK_SIZE));
+    // (decryption) always keep one block in input data buffer
+    // because we don't know when will finalize (remove paddings).
+    data_len -= (priv->c_mode == DEC ? CM_BLOCK_SIZE : 0);
+
+    // only perform operation on complete blocks
+    priv->input_data_len = data_len;
+    long status = cryptomod_dev_crypto_basic(priv);
+    if (status)
+    {
+        priv->input_data_len = original_data_len;
+        // if output data buffer is full, skip it.
+        if (status != -ENOMEM)
+        {
+            return status;
+        }
+    }
+    else
+    {
+        priv->input_data_len = original_data_len - data_len;
+        // TODO: refactor crypto procedure
+        // move the input data forward (may have overlap)
+        memmove(priv->input_data, priv->input_data + data_len, priv->input_data_len);
+        pr_info("cryptomod: perform crypto %zu/%zu bytes.\n", data_len, original_data_len);
+    }
+    return 0;
 }
 
 static int cryptomod_dev_open(struct inode *i, struct file *f)
@@ -256,6 +331,13 @@ static ssize_t cryptomod_dev_read(struct file *fp, char __user *buf, size_t len,
     if (priv == NULL)
     {
         return -EINVAL;
+    }
+
+    // ADV mode
+    if (priv->io_mode == ADV)
+    {
+        // perform streaming encryption/decryption.
+        cryptomod_dev_crypto_adv(priv);
     }
 
     size_t read_len = umin(priv->output_data_len, len);
@@ -300,7 +382,7 @@ static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
 
     // calculate offset and length
     size_t offset = priv->input_data_len;
-    size_t write_len = umin(MAX_DATA_SIZE - offset, len);
+    size_t write_len = umin(MAX_INPUT_DATA_SIZE - offset, len);
     if (write_len == 0)
     {
         return -EAGAIN;
@@ -313,21 +395,16 @@ static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
     }
     priv->input_data_len += write_len;
 
-    pr_info("cryptomod: write %zu/%zu bytes @ %zu.\n", write_len, len, offset);
+    pr_info("cryptomod: write %zu/%zu bytes, %zu total bytes.\n", write_len, len, priv->input_data_len);
     mutex_lock(&write_lock);
     counter.write_bytes += write_len;
     mutex_unlock(&write_lock);
 
-    // TODO: ADV mode
-    // if there is a complete block in input data buffer, perform encryption/decryption.
-    if (priv->io_mode == ADV && priv->input_data_len >= CM_BLOCK_SIZE)
+    // ADV mode
+    if (priv->io_mode == ADV)
     {
-        pr_info("cryptomod: perform crypto %zu/%zu bytes.\n", priv->input_data_len - (priv->input_data_len % 16), priv->input_data_len);
-        long status = cryptomod_dev_crypto(priv);
-        if (status)
-        {
-            return status;
-        }
+        // perform streaming encryption/decryption.
+        cryptomod_dev_crypto_adv(priv);
     }
     return write_len;
 }
@@ -350,6 +427,14 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
     {
         return -EINVAL;
     }
+    if (setup.c_mode != ENC && setup.c_mode != DEC)
+    {
+        return -EINVAL;
+    }
+    if (setup.io_mode != BASIC && setup.io_mode != ADV)
+    {
+        return -EINVAL;
+    }
 
     // release previous data if exists
     cryptomod_dev_free((struct PrivateData **)&fp->private_data);
@@ -367,12 +452,13 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
 
     // initialize data buffer with data size + a block size for padding
     // TODO: check menory allocation doc
-    priv->input_data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
+    priv->input_data = kzalloc(MAX_INPUT_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
     priv->input_data_len = 0;
-    priv->output_data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
+    priv->output_data = kzalloc(MAX_OUTPUT_DATA_SIZE, GFP_KERNEL);
     priv->output_data_len = 0;
 
     fp->private_data = priv;
+    pr_info("cryptomod: mode %d, io mode %d.\n", priv->c_mode, priv->io_mode);
     return 0;
 }
 
@@ -385,7 +471,7 @@ static long cryptomod_dev_ioctl_finalize(struct file *fp)
     }
 
     priv->finalized = true;
-    long status = cryptomod_dev_crypto(priv);
+    long status = cryptomod_dev_crypto_basic(priv);
     if (status)
     {
         priv->finalized = false;
