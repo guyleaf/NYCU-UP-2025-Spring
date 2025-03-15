@@ -24,19 +24,19 @@ lint:
   enabled:
     - bandit@1.8.3
     - black@25.1.0
-    - isort@6.0.0
+    - isort@6.0.1
     - taplo@0.9.3
-    - ruff@0.9.7
+    - ruff@0.9.10
     - clang-format@16.0.3
-    - yamllint@1.35.1
-    - trivy@0.59.1
+    - yamllint@1.36.0
+    - trivy@0.60.0
     - shfmt@3.6.0
     - shellcheck@0.10.0
     - hadolint@2.12.1-beta
     - git-diff-check
     - markdownlint@0.44.0
-    - prettier@3.5.1
-    - trufflehog@3.88.12
+    - prettier@3.5.3
+    - trufflehog@3.88.16
 actions:
   enabled:
     - trunk-announce
