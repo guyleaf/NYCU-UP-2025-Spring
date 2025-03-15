@@ -34,7 +34,7 @@ We do not discourage you to use LLM models, but if you use any LLM/AI approaches
 
 1. Please also solve the challenge running on our challenge server. You can access it using the command:
 
-   ```
+   ```sh
    nc up.zoolab.org 10155
    ```
 
