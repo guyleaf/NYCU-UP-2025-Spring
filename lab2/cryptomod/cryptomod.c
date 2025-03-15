@@ -38,10 +38,8 @@ struct PrivateData {
     char *key;
     int key_len;
     char *input_data;
-    // size_t input_data_offset;
     size_t input_data_len;
     char *output_data;
-    size_t output_data_offset;
     size_t output_data_len;
 };
 
@@ -53,7 +51,7 @@ static struct Counter counter = {0};
 DEFINE_MUTEX(write_lock);
 DEFINE_MUTEX(read_lock);
 
-static void cryptomod_dev_free_private_data(struct PrivateData **privp)
+static void cryptomod_dev_free(struct PrivateData **privp)
 {
     struct PrivateData *priv = *privp;
     if (priv == NULL)
@@ -137,14 +135,19 @@ static long cryptomod_dev_crypto_encrypt(struct PrivateData *priv)
 {
     size_t data_len = priv->input_data_len;
 
-    // apply padding (encryption)
-    // 1. if it is not a multiple of CM_BLOCK_SIZE, add paddings.
-    // Pad with a value equal to the total number of padding bytes added
-    // 2. if it is a multiple of CM_BLOCK_SIZE, add an entire block of padding.
-    // Pad with a value equal to CM_BLOCK_SIZE
-    size_t num_paddings = CM_BLOCK_SIZE - (data_len % CM_BLOCK_SIZE);
-    memset(priv->input_data + data_len, num_paddings, num_paddings);
-    data_len += num_paddings;
+    if (priv->finalized)
+    {
+        // apply padding (encryption)
+        // 1. if it is not a multiple of CM_BLOCK_SIZE, add paddings.
+        // Pad with a value equal to the total number of padding bytes added
+        // 2. if it is a multiple of CM_BLOCK_SIZE, add an entire block of padding.
+        // Pad with a value equal to CM_BLOCK_SIZE
+        size_t num_paddings = CM_BLOCK_SIZE - (data_len % CM_BLOCK_SIZE);
+        memset(priv->input_data + data_len, num_paddings, num_paddings);
+        data_len += num_paddings;
+    }
+
+    // TODO: validate the data size is a multiple of CM_BLOCK_SIZE.
 
     // encrypt the data
     long error = cryptomod_dev_crypto_operation(
@@ -215,6 +218,24 @@ static long cryptomod_dev_crypto_decrypt(struct PrivateData *priv)
     return 0;
 }
 
+static long cryptomod_dev_crypto(struct PrivateData *priv)
+{
+    long status;
+    switch (priv->c_mode)
+    {
+    case ENC:
+        status = cryptomod_dev_crypto_encrypt(priv);
+        break;
+    case DEC:
+        status = cryptomod_dev_crypto_decrypt(priv);
+        break;
+    default:
+        status = -EINVAL;
+        break;
+    }
+    return status;
+}
+
 static int cryptomod_dev_open(struct inode *i, struct file *f)
 {
     pr_info("cryptomod: device opened.\n");
@@ -223,7 +244,7 @@ static int cryptomod_dev_open(struct inode *i, struct file *f)
 
 static int cryptomod_dev_close(struct inode *i, struct file *f)
 {
-    cryptomod_dev_free_private_data((struct PrivateData **)&f->private_data);
+    cryptomod_dev_free((struct PrivateData **)&f->private_data);
     pr_info("cryptomod: device closed.\n");
     return 0;
 }
@@ -237,21 +258,19 @@ static ssize_t cryptomod_dev_read(struct file *fp, char __user *buf, size_t len,
         return -EINVAL;
     }
 
-    size_t offset = priv->output_data_offset;
-    size_t read_len = umin(priv->output_data_len - offset, len);
+    size_t read_len = umin(priv->output_data_len, len);
     if (read_len == 0)
     {
         return priv->finalized ? 0 : -EAGAIN;
     }
 
-    char *data = priv->output_data + offset;
-    if (copy_to_user(buf, data, read_len))
+    if (copy_to_user(buf, priv->output_data, read_len))
     {
         return -EBUSY;
     }
-    priv->output_data_offset += read_len;
+    priv->output_data_len -= read_len;
 
-    pr_info("cryptomod: read %zu/%zu bytes @ %zu.\n", read_len, len, offset);
+    pr_info("cryptomod: read %zu/%zu bytes, %zu bytes left.\n", read_len, len, priv->output_data_len);
     mutex_lock(&read_lock);
     counter.read_bytes += read_len;
     mutex_unlock(&read_lock);
@@ -260,10 +279,13 @@ static ssize_t cryptomod_dev_read(struct file *fp, char __user *buf, size_t len,
         mutex_lock(&read_lock);
         for (size_t i = 0; i < read_len; i++)
         {
-            counter.frequency[(size_t)*(data + i)] += 1;
+            counter.frequency[(size_t)*(priv->output_data + i)] += 1;
         }
         mutex_unlock(&read_lock);
     }
+
+    // move the output data forward (may have overlap)
+    memmove(priv->output_data, priv->output_data + read_len, priv->output_data_len);
     return read_len;
 }
 
@@ -276,6 +298,7 @@ static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
         return -EINVAL;
     }
 
+    // calculate offset and length
     size_t offset = priv->input_data_len;
     size_t write_len = umin(MAX_DATA_SIZE - offset, len);
     if (write_len == 0)
@@ -283,6 +306,7 @@ static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
         return -EAGAIN;
     }
 
+    // store the data
     if (copy_from_user(priv->input_data + offset, buf, write_len))
     {
         return -EBUSY;
@@ -293,6 +317,18 @@ static ssize_t cryptomod_dev_write(struct file *fp, const char __user *buf,
     mutex_lock(&write_lock);
     counter.write_bytes += write_len;
     mutex_unlock(&write_lock);
+
+    // TODO: ADV mode
+    // if there is a complete block in input data buffer, perform encryption/decryption.
+    if (priv->io_mode == ADV && priv->input_data_len >= CM_BLOCK_SIZE)
+    {
+        pr_info("cryptomod: perform crypto %zu/%zu bytes.\n", priv->input_data_len - (priv->input_data_len % 16), priv->input_data_len);
+        long status = cryptomod_dev_crypto(priv);
+        if (status)
+        {
+            return status;
+        }
+    }
     return write_len;
 }
 
@@ -316,7 +352,7 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
     }
 
     // release previous data if exists
-    cryptomod_dev_free_private_data((struct PrivateData **)&fp->private_data);
+    cryptomod_dev_free((struct PrivateData **)&fp->private_data);
 
     // save configurations
     struct PrivateData *priv = kmalloc(sizeof(struct PrivateData), GFP_KERNEL);
@@ -326,16 +362,14 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
 
     // copy key from user-space buffer
     priv->key = kmalloc(setup.key_len, GFP_KERNEL);
-    memmove(priv->key, setup.key, setup.key_len);
+    memcpy(priv->key, setup.key, setup.key_len);
     priv->key_len = setup.key_len;
 
     // initialize data buffer with data size + a block size for padding
     // TODO: check menory allocation doc
     priv->input_data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
-    // priv->input_data_offset = 0;
     priv->input_data_len = 0;
     priv->output_data = kzalloc(MAX_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
-    priv->output_data_offset = 0;
     priv->output_data_len = 0;
 
     fp->private_data = priv;
@@ -350,22 +384,12 @@ static long cryptomod_dev_ioctl_finalize(struct file *fp)
         return -EINVAL;
     }
 
-    long status;
-    switch (priv->c_mode)
+    priv->finalized = true;
+    long status = cryptomod_dev_crypto(priv);
+    if (status)
     {
-    case ENC:
-        status = cryptomod_dev_crypto_encrypt(priv);
-        priv->finalized = true;
-        break;
-    case DEC:
-        status = cryptomod_dev_crypto_decrypt(priv);
-        priv->finalized = true;
-        break;
-    default:
-        status = -EINVAL;
-        break;
+        priv->finalized = false;
     }
-
     return status;
 }
 
@@ -378,10 +402,7 @@ static long cryptomod_dev_ioctl_cleanup(struct file *fp)
 
     struct PrivateData *priv = (struct PrivateData *)fp->private_data;
     priv->finalized = false;
-    // memset(priv->data, 0, MAX_DATA_SIZE + CM_BLOCK_SIZE);
-    // priv->input_data_offset = 0;
     priv->input_data_len = 0;
-    priv->output_data_offset = 0;
     priv->output_data_len = 0;
     return 0;
 }
