@@ -86,7 +86,14 @@
 			"seq_file.h": "c",
 			"cred.h": "c",
 			"cryptomod.h": "c",
-			"string.h": "c"
+			"string.h": "c",
+			"errno.h": "c",
+			"module.h": "c",
+			"proc_fs.h": "c",
+			"kernel.h": "c",
+			"skcipher.h": "c",
+			"scatterlist.h": "c",
+			"futex.h": "c"
 		}
 	}
 }
