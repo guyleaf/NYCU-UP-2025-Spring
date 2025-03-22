@@ -5,7 +5,7 @@ set -eu
 find /modules -name "*.ko" -type f -exec "insmod" "{}" \;
 
 # download missing files
-echo "6a98b2ed0c47f631e3b8995db9dffb29  test_crypto" >>/md5sum
+echo "a77e4e644ecf204f062106bab6938c38  test_crypto" >/md5sum
 echo "6bcfed610a256de36acdf4eb106f58b7  fun.jpg.enc" >>/md5sum
 
 if [ ! -f "/test_crypto" ]; then
