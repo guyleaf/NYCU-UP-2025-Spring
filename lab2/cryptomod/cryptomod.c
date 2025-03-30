@@ -150,6 +150,7 @@ static long cryptomod_dev_crypto_encrypt(struct PrivateData *priv)
     else
     {
         // only encrypt complete blocks
+        // TODO: consider the left space in the output data buffer
         data_len -= (data_len % CM_BLOCK_SIZE);
     }
 
@@ -193,6 +194,7 @@ static long cryptomod_dev_crypto_decrypt(struct PrivateData *priv)
     if (!priv->finalized)
     {
         // only decrypt complete blocks
+        // TODO: consider the left space in the output data buffer
         data_len -= (data_len % CM_BLOCK_SIZE);
     }
 
@@ -451,7 +453,6 @@ static long cryptomod_dev_ioctl_setup(struct file *fp, struct CryptoSetup * arg)
     priv->key_len = setup.key_len;
 
     // initialize data buffer with data size + a block size for padding
-    // TODO: check menory allocation doc
     priv->input_data = kzalloc(MAX_INPUT_DATA_SIZE + CM_BLOCK_SIZE, GFP_KERNEL);
     priv->input_data_len = 0;
     priv->output_data = kzalloc(MAX_OUTPUT_DATA_SIZE, GFP_KERNEL);
