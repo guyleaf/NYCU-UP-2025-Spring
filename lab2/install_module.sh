@@ -22,7 +22,8 @@ md5sum -c /md5sum
 chmod +x /test_crypto
 
 # tests
-echo 4 >/proc/sys/kernel/printk
+# ignore erros
+echo 3 >/proc/sys/kernel/printk
 
 i=0
 while [ "${i}" -le 6 ]; do
