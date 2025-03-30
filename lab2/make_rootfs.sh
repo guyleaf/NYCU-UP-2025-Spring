@@ -3,8 +3,13 @@ set -eu
 
 pwd=$PWD
 
+cd vm/dist
+if [ ! -f "rootfs.orig.cpio.bz2" ]; then
+	cp rootfs.cpio.bz2 rootfs.orig.cpio.bz2
+fi
+
 # unzip rootfs
-cd vm/dist && rm -rf rootfs && mkdir rootfs && cd rootfs && (bunzip2 -c ../rootfs.cpio.bz2 | cpio -i) && cd "${pwd}"
+rm -rf rootfs && mkdir rootfs && cd rootfs && (bunzip2 -c ../rootfs.orig.cpio.bz2 | cpio -i) && cd "${pwd}"
 
 # copy built module to rootfs
 cd cryptomod && make clean && make && make install && cd "${pwd}"
