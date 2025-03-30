@@ -1,0 +1,4 @@
+[submodule "up-inclass"]
+	path = up-inclass
+	url = https://github.com/chunying/up-inclass.git
+	branch = master
