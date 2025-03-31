@@ -2,6 +2,7 @@ import sys
 
 from pwn import ELF
 
+# TODO: auto-generate got table in macros from here.
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(f"usage: {sys.argv[0]} gotoku/gotoku.local")
