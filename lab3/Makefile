@@ -2,18 +2,19 @@ SHELL 			= /bin/sh
 
 #### Start of system configuration section. ####
 
-CXX				= g++
-CXXFLAGS		= -std=c++17 -Wall -Wextra -pedantic
-LDFLAGS			=
+C				= gcc
+CFLAGS			= -std=c17 -Wall -Wextra -pedantic
+LDFLAGS			= -ldl
 
 prefix 			= .
 srcdir			= $(prefix)
-sampledir 	= $(prefix)/sample
+sampledir 		= $(prefix)/sample
+toolsdir		= $(prefix)/tools
 
 #### End of system configuration section. ####
 
-PROG			= libsolver
-SRCS			= libsolver.c
+PROG			= libgotoku
+SRCS			= libgotoku.c
 
 # search dependencies
 vpath %.c $(srcdir)
@@ -21,8 +22,14 @@ vpath %.c $(srcdir)
 .PHONY: all
 all: $(PROG).so
 
-$(PROG).so: $(PROG).c libgotoku.h
-	gcc -shared -fPIC -ldl -o $@ $<
+got_gotoku.h: sample
+	python3 "$(toolsdir)/generate_got_header.py" "$(sampledir)/gotoku" -o $@
+
+got_gotoku_local.h: sample
+	python3 "$(toolsdir)/generate_got_header.py" "$(sampledir)/gotoku.local" -o $@
+
+$(PROG).so: $(PROG).c libgotoku.h got_gotoku.h got_gotoku_local.h
+	$(C) -shared -fPIC $(CFLAGS) $(LDFLAGS) -o $@ $<
 
 ########
 
@@ -31,12 +38,13 @@ sample:
 	make -C "$(sampledir)"
 
 .PHONY: debug
-debug: $(PROG).so sample
+debug: CFLAGS += -DDEBUG -g -Og
+debug: all
 
 .PHONY: clean
 clean:
-	rm -f $(PROG).so
+	rm -f $(PROG).so got_gotoku.h got_gotoku_local.h
 
-.PHONY: debug_clean
-debug_clean: clean
+.PHONY: sample_clean
+sample_clean:
 	make -C "$(sampledir)" clean
