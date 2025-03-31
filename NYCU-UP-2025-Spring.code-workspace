@@ -93,7 +93,17 @@
 			"kernel.h": "c",
 			"skcipher.h": "c",
 			"scatterlist.h": "c",
-			"futex.h": "c"
+			"futex.h": "c",
+			"cstring": "cpp",
+			"csignal": "cpp",
+			"unordered_set": "cpp",
+			"cerrno": "cpp",
+			"bitset": "cpp",
+			"regex": "cpp",
+			"execinfo.h": "c",
+			"libgotoku.h": "c",
+			"shm.h": "c",
+			"syscall.h": "c"
 		}
 	}
 }
