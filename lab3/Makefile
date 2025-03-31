@@ -21,8 +21,8 @@ vpath %.c $(srcdir)
 .PHONY: all
 all: $(PROG).so
 
-$(PROG).so: $(PROG).c
-	gcc -shared -fPIC -o $@ $<
+$(PROG).so: $(PROG).c libgotoku.h
+	gcc -shared -fPIC -ldl -o $@ $<
 
 ########
 
@@ -33,7 +33,10 @@ sample:
 .PHONY: debug
 debug: $(PROG).so sample
 
-.PHONY: debug
+.PHONY: clean
 clean:
 	rm -f $(PROG).so
+
+.PHONY: debug_clean
+debug_clean: clean
 	make -C "$(sampledir)" clean
