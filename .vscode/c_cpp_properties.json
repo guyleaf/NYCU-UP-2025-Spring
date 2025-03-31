@@ -38,6 +38,18 @@
       "browse": {
         "limitSymbolsToIncludedHeaders": true
       }
+    },
+    {
+      "name": "Linux-lab3",
+      "compilerPath": "/usr/bin/gcc",
+      // "compilerArgs": [],
+      "includePath": ["${workspaceFolder}/lab3"],
+      "intelliSenseMode": "linux-gcc-x64",
+      "cStandard": "c11",
+      "mergeConfigurations": true,
+      "browse": {
+        "limitSymbolsToIncludedHeaders": true
+      }
     }
   ]
 }
