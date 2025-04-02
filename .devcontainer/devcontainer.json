@@ -19,7 +19,7 @@
     "Remove .trunk symbolic links": "rm -f .trunk/tools .trunk/logs .trunk/notifications .trunk/out && trunk --version"
   },
   "containerEnv": {
-    "LD_LIBRARY_PATH": "${workspaceFolder}/lab3/sample"
+    "LD_LIBRARY_PATH": "${containerWorkspaceFolder}/lab3/sample"
   },
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   // "remoteUser": "root"
@@ -61,7 +61,8 @@
         "bpruitt-goddard.mermaid-markdown-syntax-highlighting",
         "Percy.vscode-numpy-viewer",
         "twxs.cmake",
-        "ms-python.python"
+        "ms-python.python",
+        "ms-vscode.makefile-tools"
       ]
     }
   }

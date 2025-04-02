@@ -40,16 +40,15 @@
       }
     },
     {
-      "name": "Linux-lab3",
+      "name": "Linux",
       "compilerPath": "/usr/bin/gcc",
-      // "compilerArgs": [],
-      "includePath": ["${workspaceFolder}/lab3"],
       "intelliSenseMode": "linux-gcc-x64",
-      "cStandard": "c11",
+      "cStandard": "c17",
       "mergeConfigurations": true,
       "browse": {
         "limitSymbolsToIncludedHeaders": true
-      }
+      },
+      "configurationProvider": "ms-vscode.makefile-tools"
     }
   ]
 }
