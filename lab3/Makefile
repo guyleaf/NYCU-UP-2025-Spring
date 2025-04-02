@@ -3,7 +3,7 @@ SHELL 			= /bin/sh
 #### Start of system configuration section. ####
 
 C				= gcc
-CFLAGS			= -std=c17 -Wall -Wextra -pedantic
+CFLAGS			= -std=c17 -Wall -Wextra
 LDFLAGS			= -ldl
 
 prefix 			= .
