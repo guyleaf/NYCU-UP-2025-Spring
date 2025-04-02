@@ -3,16 +3,16 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <execinfo.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/shm.h>
-#include <sys/syscall.h>
-
 #include <dlfcn.h>
+#include <sys/mman.h>
 
 #include "libgotoku.h"
+
+#ifdef DEBUG
+#include "got_gotoku_local.h"
+#else
+#include "got_gotoku.h"
+#endif
 
 #define LIBGOTOKU_SO "libgotoku.so"
 #define GAMEPFX	"GOTOKU: "
@@ -55,7 +55,7 @@ game_load(const char *fn) {
 
 	dlerror();    /* Clear any existing error */
 
-	__game_load_t fptr = dlsym(handle, "game_load");
+	__game_load_t fptr = (__game_load_t)dlsym(handle, "game_load");
 	if (!fptr) {
 		fprintf(stderr, "%s\n", dlerror());
 		exit(EXIT_FAILURE);
@@ -63,6 +63,16 @@ game_load(const char *fn) {
 
 	gotoku_t *board = fptr(fn);
 	// TODO: solve sodoku
+
+	void *ptr = dlsym(handle, "gop_1");
+	if (!ptr) {
+		fprintf(stderr, "%s\n", dlerror());
+		exit(EXIT_FAILURE);
+	}
+
+	void **got_ptr = __stored_ptr + (GOP_1 - MAIN);
+	void *gop_ptr = *got_ptr;
+	printf("%p, %p\n", ptr, gop_ptr);
 
 	dlclose(handle);
 	return board;
