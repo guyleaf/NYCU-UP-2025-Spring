@@ -7,7 +7,7 @@ gotoku:
 	curl -o $@ https://up.zoolab.org/unixprog/lab03/gotoku
 
 gotoku.local: gotoku.c gops.c libgotoku.h libgotoku.so
-	gcc -L. -Wl,-rpath=. -o $@ gotoku.c -lgotoku -z now
+	gcc -L. -o $@ gotoku.c -lgotoku -z now
 
 clean:
 	rm -f libgotoku.so gotoku gotoku.local
