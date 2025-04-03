@@ -40,40 +40,70 @@ game_init() {
 	return 0;
 }
 
-void solve_sudoku(gotoku_t *board)
-{
 
+
+int solve_sudoku(gotoku_t *gotoku) {
+	if (gotoku->x >= 9 || gotoku->y >= 9) {
+		return 0;
+	}
+
+	// down
+	gotoku->y;
+
+	// right
+	return -1;
+}
+
+gotoku_t *
+game_load_internal(const char *fn) {
+	dlerror();    /* Clear any existing error */
+
+	void *handle = dlopen(LIBGOTOKU_SO, RTLD_LAZY);
+	if (!handle) {
+		fprintf(stderr, GAMEPFX "dlopen failed - %s\n", dlerror());
+		return NULL;
+	}
+
+	__game_load_t fptr = (__game_load_t)dlsym(handle, "game_load");
+	if (!fptr) {
+		fprintf(stderr, GAMEPFX "dlsym failed - %s\n", dlerror());
+		goto err_quit;
+	}
+
+	gotoku_t *gotoku = fptr(fn);
+err_quit:
+	dlclose(handle);
+	return gotoku;
 }
 
 gotoku_t *
 game_load(const char *fn) {
-	void *handle = dlopen(LIBGOTOKU_SO, RTLD_LAZY);
-	if (!handle) {
-		fprintf(stderr, "%s\n", dlerror());
-		exit(EXIT_FAILURE);
+	gotoku_t *gotoku = game_load_internal(fn);
+	if (!gotoku) {
+		goto err_quit;
 	}
 
-	dlerror();    /* Clear any existing error */
-
-	__game_load_t fptr = (__game_load_t)dlsym(handle, "game_load");
-	if (!fptr) {
-		fprintf(stderr, "%s\n", dlerror());
-		exit(EXIT_FAILURE);
+	// solve sodoku
+	gotoku_t *solved_gotoku = (gotoku_t*) malloc(sizeof(gotoku_t));
+	if(!solved_gotoku) {
+		fprintf(stderr, GAMEPFX "alloc failed - %s.\n", strerror(errno));
+		goto err_quit;
 	}
 
-	gotoku_t *board = fptr(fn);
-	// TODO: solve sodoku
+	solved_gotoku->x = solved_gotoku->y = 0;
+	memcpy(solved_gotoku->board, gotoku->board, sizeof(gotoku->board));
+	solve_sudoku(solved_gotoku);
 
-	void *ptr = dlsym(handle, "gop_1");
-	if (!ptr) {
-		fprintf(stderr, "%s\n", dlerror());
-		exit(EXIT_FAILURE);
-	}
+	// manipulate gop_### to fill the board
 
-	void **got_ptr = __stored_ptr + (GOP_1 - MAIN);
-	void *gop_ptr = *got_ptr;
-	printf("%p, %p\n", ptr, gop_ptr);
+	// void **got_ptr = __stored_ptr + (GOP_1 - MAIN);
+	// void *gop_ptr = *got_ptr;
+	// printf("%p, %p\n", ptr, gop_ptr);
 
-	dlclose(handle);
-	return board;
+	free(solved_gotoku);
+	return gotoku;
+err_quit:
+	free(solved_gotoku);
+	game_free(gotoku);
+	return NULL;
 }
