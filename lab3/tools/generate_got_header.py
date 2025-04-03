@@ -36,15 +36,18 @@ if __name__ == "__main__":
         f.write(f"#define {header_name}\n\n")
 
         main_addr = elf.symbols["main"]
-        f.write(f"#define MAIN {hex(main_addr)}\n\n")
+        min_got_offset = float("inf")
+        max_got_offset = float("-inf")
+        got_offsets = []
+        for s in [f"gop_{i}" for i in range(1, 1201)]:
+            got_offset = elf.got[s] - main_addr
+            got_offsets.append(hex(got_offset))
+            min_got_offset = min(min_got_offset, got_offset)
+            max_got_offset = max(max_got_offset, got_offset)
+        array = ",".join(got_offsets)
+        f.write(f"uintptr_t GOT_OFFSETS[] = {{{array}}};\n")
 
-        # print("main =", main_addr)
-        # print("{:<12s} {:<10s} {:<10s}".format("Func", "GOT Offset", "Symbol Offset"))
-        for s in [f"gop_{i+1}" for i in range(1200)]:
-            if s in elf.got:
-                got_addr = elf.got[s]
-                f.write(f"#define {s.upper()} {hex(got_addr)}\n")
-
-                # print("{:<12s} {:<10x} {:<10x}".format(s, got_addr, elf.symbols[s]))
-
+        f.write("\n")
+        f.write(f"#define MIN_GOT_OFFSET {hex(min_got_offset)}\n")
+        f.write(f"#define MAX_GOT_OFFSET {hex(max_got_offset)}\n")
         f.write("\n#endif\n")
