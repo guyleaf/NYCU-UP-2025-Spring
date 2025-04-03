@@ -9,7 +9,7 @@ int main() {
 	game_set_ptr(main);
 	if(game_init() != 0)
 		return -1;
-	if((board = game_load("./gotoku.txt")) == NULL)
+	if((board = game_load("sample/gotoku.txt")) == NULL)
 		return -1;
 	gop_show();
 #define GAME_OP(n)	gop_##n();
