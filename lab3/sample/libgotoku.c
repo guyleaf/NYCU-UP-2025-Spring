@@ -78,7 +78,7 @@ static int
 cmpint(const void *a, const void *b) {
 	int pa = *((int *) a);
 	int pb = *((int *) b);
-	return pa > pb;
+	return pa - pb;
 }
 
 static int
