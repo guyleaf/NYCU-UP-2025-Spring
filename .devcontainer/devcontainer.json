@@ -18,6 +18,9 @@
     "List compiler versions": "gcc -v && printf '\n' && g++ -v && printf '\n' && clang++ -v",
     "Remove .trunk symbolic links": "rm -f .trunk/tools .trunk/logs .trunk/notifications .trunk/out && trunk --version"
   },
+  "containerEnv": {
+    "LD_LIBRARY_PATH": "${containerWorkspaceFolder}/lab3/sample"
+  },
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   // "remoteUser": "root"
   "mounts": [
@@ -58,7 +61,8 @@
         "bpruitt-goddard.mermaid-markdown-syntax-highlighting",
         "Percy.vscode-numpy-viewer",
         "twxs.cmake",
-        "ms-python.python"
+        "ms-python.python",
+        "ms-vscode.makefile-tools"
       ]
     }
   }

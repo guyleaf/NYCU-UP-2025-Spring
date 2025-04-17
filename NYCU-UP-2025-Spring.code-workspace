@@ -8,6 +8,17 @@
 		}
 	],
 	"settings": {
+		"makefile.configurations": [
+			// dummy default config
+			{
+				"name": "Default",
+				"makeDirectory": "${workspaceFolder}/lab3"
+			},
+			{
+				"name": "Linux-lab3",
+				"makeDirectory": "${workspaceFolder}/lab3",
+			}
+		],
 		"files.associations": {
 			".env*": "dotenv",
 			"cmath": "cpp",
@@ -93,7 +104,20 @@
 			"kernel.h": "c",
 			"skcipher.h": "c",
 			"scatterlist.h": "c",
-			"futex.h": "c"
+			"futex.h": "c",
+			"cstring": "cpp",
+			"csignal": "cpp",
+			"unordered_set": "cpp",
+			"cerrno": "cpp",
+			"bitset": "cpp",
+			"regex": "cpp",
+			"execinfo.h": "c",
+			"libgotoku.h": "c",
+			"shm.h": "c",
+			"syscall.h": "c",
+			"got_gotoku_local.h": "c",
+			"dlfcn.h": "c",
+			"stdio.h": "c"
 		}
 	}
 }
