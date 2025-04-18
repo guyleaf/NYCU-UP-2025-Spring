@@ -17,8 +17,19 @@
 			{
 				"name": "Linux-lab3",
 				"makeDirectory": "${workspaceFolder}/lab3",
+			},
+			{
+				"name": "Linux-hw1",
+				"makeDirectory": "${workspaceFolder}/hw1",
 			}
 		],
+		"[c]": {
+			// use cpptools instead of trunk in C
+			// the clang-format tool in trunk doesn't work in C
+			"editor.defaultFormatter": "ms-vscode.cpptools"
+		},
+		"C_Cpp.clang_format_fallbackStyle": "none",
+		"C_Cpp.clang_format_style": "file:${workspaceFolder}/.trunk/configs/.clang-format",
 		"files.associations": {
 			".env*": "dotenv",
 			"cmath": "cpp",
@@ -117,7 +128,9 @@
 			"syscall.h": "c",
 			"got_gotoku_local.h": "c",
 			"dlfcn.h": "c",
-			"stdio.h": "c"
+			"stdio.h": "c",
+			"mman.h": "c",
+			"stddef.h": "c"
 		}
 	}
 }
