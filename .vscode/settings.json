@@ -1,9 +1,0 @@
-{
-  "[c]": {
-    // use cpptools instead of trunk in C
-    // the clang-format tool in trunk doesn't work in C
-    "editor.defaultFormatter": "ms-vscode.cpptools"
-  },
-  "C_Cpp.clang_format_fallbackStyle": "none",
-  "C_Cpp.clang_format_style": "file:${workspaceFolder}/.trunk/configs/.clang-format"
-}
