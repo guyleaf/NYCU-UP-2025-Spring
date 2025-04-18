@@ -44,6 +44,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends locales \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
+# Install pwndbg
+# WORKDIR /usr/local/src
+# RUN git clone https://github.com/pwndbg/pwndbg.git
+# WORKDIR /usr/local/src/pwndbg
+# RUN ./setup.sh
+
 # Optionally install the cmake for vcpkg
 COPY ./reinstall-cmake.sh /tmp/
 
@@ -52,8 +58,13 @@ RUN if [ "${REINSTALL_CMAKE_VERSION_FROM_SOURCE}" != "none" ]; then \
     fi \
     && rm -f /tmp/reinstall-cmake.sh
 
+COPY ./mmap.conf /etc/sysctl.d/
+
 # Switch to vscode user
 USER vscode
+
+# Install gef
+RUN bash -c "$(curl -fsSL https://gef.blah.cat/sh)"
 
 # Persist bash history
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=${BASH_HISTORY}" \

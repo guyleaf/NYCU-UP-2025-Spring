@@ -11,7 +11,8 @@
     "ghcr.io/trunk-io/devcontainer-feature/trunk": "latest"
   },
   // reference: https://github.com/chunying/up-runtime/blob/main/start.sh#L21
-  "capAdd": ["SYS_ADMIN", "NET_ADMIN", "DAC_READ_SEARCH"],
+  "capAdd": ["SYS_ADMIN", "SYS_RAWIO", "NET_ADMIN", "DAC_READ_SEARCH"],
+  "securityOpt": ["seccomp=unconfined", "systempaths=unconfined"],
   "updateContentCommand": "trunk install --ci",
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": {
