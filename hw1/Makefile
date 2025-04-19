@@ -13,20 +13,25 @@ srcdir			= $(prefix)
 
 #### End of system configuration section. ####
 
-PROG			= libzpoline
-SRCS			= libzpoline.c
+PROGS			= libzpoline.so.1 libzpoline.so.2 libzpoline.so
 
 # search dependencies
 vpath %.c $(srcdir)
 
 .PHONY: all
-all: $(PROG).so
+all: main
 
-$(PROG).so: $(PROG).c
+libzpoline.so: libzpoline.c
 	$(C) -shared -fPIC $(CFLAGS) $(LDFLAGS) -o $@ $<
 
-# main: main.c $(PROG).so
-# 	gcc -L. -o $@ $< $(CFLAGS) $(LDFLAGS) -lzpoline -z now
+libzpoline.so.1: libzpoline1.c
+	$(C) -shared -fPIC $(CFLAGS) $(LDFLAGS) -o $@ $<
+
+libzpoline.so.2: libzpoline2.c
+	$(C) -shared -fPIC $(CFLAGS) $(LDFLAGS) -o $@ $<
+
+main: main.c $(PROGS)
+	gcc -L. -o $@ $< $(CFLAGS) $(LDFLAGS) -lzpoline -z now
 
 ########
 
@@ -39,7 +44,7 @@ test: | test_ex1
 
 .PHONY: test_ex1
 test_ex1:
-	LD_PRELOAD=libzpoline.so ./examples/ex1
+	LD_PRELOAD=libzpoline.so.2 ./examples/ex1
 
 .PHONY: debug
 debug: CFLAGS += -DDEBUG -g -Og
@@ -47,4 +52,4 @@ debug: all
 
 .PHONY: clean
 clean:
-	rm -f $(PROG).so main
+	rm -f $(PROGS) main
