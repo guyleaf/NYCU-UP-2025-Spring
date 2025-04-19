@@ -233,7 +233,7 @@ static void __deallocate_mmap(void *ptr, size_t size)
 
 static void __wrap_syscall()
 {
-    uint16_t *ptr;
+    uint8_t *ptr;
     size_t num_ranges = 0;
     uintptr_t (*addr_ranges)[2] = __find_exec_addresses(&num_ranges);
 
@@ -244,18 +244,18 @@ static void __wrap_syscall()
 
         __set_mem_permissions((void *)start_addr, end_addr - start_addr,
                               PROT_READ | PROT_WRITE | PROT_EXEC);
-        // printf("\t --> %lx-%lx\n", start_addr, end_addr);
 
-        // iterate two-byte to identify syscall
-        for (ptr = (uint16_t *)start_addr; (uintptr_t)ptr < end_addr; ptr++)
+        // iterate each byte to identify syscall
+        for (ptr = (uint8_t *)start_addr; (uintptr_t)ptr < end_addr - 1; ptr++)
         {
-            if (*ptr == SYSCALL_CODE || *ptr == SYSENTER_CODE)
+            // syscall is 2-byte instruction
+            uint16_t *code = (uint16_t *)ptr;
+            if (*code == SYSCALL_CODE || *code == SYSENTER_CODE)
             {
                 // replace with call *%rax
                 // FF d0
                 // little-edian
-                *ptr = 0xd0ff;
-                // printf("%p: %x\n", ptr, *ptr);
+                *code = 0xd0ff;
             }
         }
 
