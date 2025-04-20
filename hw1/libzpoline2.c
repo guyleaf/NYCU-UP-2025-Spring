@@ -45,26 +45,10 @@ void __raw_asm()
         "trigger_syscall: \t\n"
         // get syscall id
         "mov 8(%rsp), %rax \t\n"
-        // following thr x86_64 ABI,
-        // preserve all general-purpose registers (caller-saved) before syscall
-        // except %rcx,%r11,%rax
-        "push %r10 \t\n"
-        "push %r9 \t\n"
-        "push %r8 \t\n"
-        "push %rdi \t\n"
-        "push %rsi \t\n"
-        "push %rdx \t\n"
         // convert arguments from normal function to syscall
         // pass arguments in reversed order (right-to-left)
         "mov %rcx, %r10 \t\n"
         "syscall \t\n"
-        // restore registers
-        "pop %rdx \t\n"
-        "pop %rsi \t\n"
-        "pop %rdi \t\n"
-        "pop %r8 \t\n"
-        "pop %r9 \t\n"
-        "pop %r10 \t\n"
         "ret \t\n");
 }
 
@@ -98,6 +82,16 @@ int64_t handle_syscall(int64_t rdi, int64_t rsi, int64_t rdx, int64_t rcx,
 void trampoline()
 {
     __asm__ volatile(
+        // following thr x86_64 ABI,
+        // preserve all general-purpose registers (caller-saved) before syscall
+        // except %rcx,%r11,%rax
+        "int3 \t\n"
+        "push %r10 \t\n"
+        "push %r9 \t\n"
+        "push %r8 \t\n"
+        "push %rdi \t\n"
+        "push %rsi \t\n"
+        "push %rdx \t\n"
         // convert arguments from syscall to normal function
         // pass arguments in reversed order (right-to-left)
         "push %rax \t\n"
@@ -105,12 +99,13 @@ void trampoline()
         "call handle_syscall \t\n"
         // restore stack pointer
         "add $8, %rsp \t\n"
-        // store return value of syscall
-        "push %rax \t\n");
-
-    __asm__ volatile(
-        // return the return value of syscall from stack
-        "pop %rax \t\n");
+        // restore registers
+        "pop %rdx \t\n"
+        "pop %rsi \t\n"
+        "pop %rdi \t\n"
+        "pop %r8 \t\n"
+        "pop %r9 \t\n"
+        "pop %r10 \t\n");
 }
 
 __attribute__((constructor)) static void __libinit()
