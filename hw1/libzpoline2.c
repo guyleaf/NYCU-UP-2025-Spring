@@ -43,12 +43,30 @@ void __raw_asm()
 {
     __asm__ volatile(
         "trigger_syscall: \t\n"
-        // get syscall id
-        "mov 8(%rsp), %rax \t\n"
+        "push %rbp \t\n"
+        "mov %rsp, %rbp \t\n"
+        "push %r12 \t\n"
+
+        // perform 16-byte alignment
+        "mov $0xfffffffffffffff0, %r11 \t\n"
+        "mov %rsp, %r12 \t\n"
+        "and %rsp, %r11 \t\n"
+        // %r12: mod 16
+        "sub %r11, %r12 \t\n"
+        "sub %r12, %rsp \t\n"
+
         // convert arguments from normal function to syscall
         // pass arguments in reversed order (right-to-left)
+        // get syscall id
+        "mov 16(%rbp), %rax \t\n"
         "mov %rcx, %r10 \t\n"
         "syscall \t\n"
+
+        // restore rsp
+        "add %r12, %rsp \t\n"
+
+        "pop %r12 \t\n"
+        "leave \t\n"
         "ret \t\n");
 }
 
@@ -82,30 +100,48 @@ int64_t handle_syscall(int64_t rdi, int64_t rsi, int64_t rdx, int64_t rcx,
 void trampoline()
 {
     __asm__ volatile(
+        "push %rbp \t\n"
+        "mov %rsp, %rbp \t\n"
         // following thr x86_64 ABI,
         // preserve all general-purpose registers (caller-saved) before syscall
         // except %rcx,%r11,%rax
-        "int3 \t\n"
         "push %r10 \t\n"
         "push %r9 \t\n"
         "push %r8 \t\n"
         "push %rdi \t\n"
         "push %rsi \t\n"
         "push %rdx \t\n"
+        "push %r12 \t\n"
+
+        // perform 16-byte alignment
+        "mov $0xfffffffffffffff0, %r11 \t\n"
+        "mov %rsp, %r12 \t\n"
+        "and %rsp, %r11 \t\n"
+        // %r12: mod 16
+        "sub %r11, %r12 \t\n"
+        "sub %r12, %rsp \t\n"
+
         // convert arguments from syscall to normal function
         // pass arguments in reversed order (right-to-left)
+        "sub $8, %rsp \t\n"
         "push %rax \t\n"
         "mov %r10, %rcx \t\n"
         "call handle_syscall \t\n"
-        // restore stack pointer
-        "add $8, %rsp \t\n"
+        "add $16, %rsp \t\n"
+
+        // restore rsp
+        "add %r12, %rsp \t\n"
+
         // restore registers
+        "pop %r12 \t\n"
         "pop %rdx \t\n"
         "pop %rsi \t\n"
         "pop %rdi \t\n"
         "pop %r8 \t\n"
         "pop %r9 \t\n"
-        "pop %r10 \t\n");
+        "pop %r10 \t\n"
+        // mov %rbp, %rsp; pop %rbp
+        "leave \t\n");
 }
 
 __attribute__((constructor)) static void __libinit()

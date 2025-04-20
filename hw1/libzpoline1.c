@@ -41,9 +41,6 @@ __attribute__((constructor)) static void __libinit()
     {
         UINT8_PTR(mem)[i] = 0x90;
     }
-#ifdef DEBUG
-    UINT8_PTR(mem)[NUM_NOPS - 1] = 0xcc;
-#endif
     offset += NUM_NOPS;
 
     // preserve redzone
