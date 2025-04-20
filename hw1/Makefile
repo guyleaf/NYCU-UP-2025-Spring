@@ -13,13 +13,13 @@ srcdir			= $(prefix)
 
 #### End of system configuration section. ####
 
-PROGS			= libzpoline.so.1 libzpoline.so.2 libzpoline.so
+PROGS			= libzpoline.so.1 libzpoline.so.2 libzpoline.so logger.so
 
 # search dependencies
 vpath %.c $(srcdir)
 
 .PHONY: all
-all: main
+all: $(PROGS)
 
 libzpoline.so: libzpoline.c
 	$(C) -shared -fPIC -o $@ $< $(CFLAGS) $(LDFLAGS)
@@ -33,11 +33,11 @@ libzpoline.so.%: libzpoline%.c
 # libzpoline.o.%: libzpoline%.c
 # 	$(C) -fPIC -c -o $@ $< $(CFLAGS)
 
+logger.so: logger.c
+	$(C) -shared -fPIC -o $@ $< $(CFLAGS) $(LDFLAGS)
+
 asm_%: %
 	objdump -d -M intel $* > $(subst so,asm,$*)
-
-main: main.c $(PROGS)
-	gcc -L. -o $@ $< $(CFLAGS) $(LDFLAGS) -lzpoline -z now
 
 ########
 
@@ -46,7 +46,7 @@ download:
 	cd data && wget https://up.zoolab.org/unixprog/hw01/examples.tgz && tar xf examples.tgz
 
 .PHONY: test
-test: all | test_ex1 test_ex2_1 test_ex2_2 test_ex3
+test: all | test_ex1 test_ex2_1 test_ex2_2 test_ex3 test_ex4_1 test_ex4_2 test_ex5 test_ex6
 
 .PHONY: debug_test
 debug_test: debug | test_ex1 test_ex2_1 test_ex2_2 test_ex3
@@ -65,7 +65,23 @@ test_ex2_2:
 
 .PHONY: test_ex3
 test_ex3:
-	LD_PRELOAD=./libzpoline.so LIBZPHOOK=./examples/libex3hook.so ./examples/ex3  && echo "============="
+	LD_PRELOAD=libzpoline.so LIBZPHOOK=./examples/libex3hook.so ./examples/ex3  && echo "============="
+
+.PHONY: test_ex4_1
+test_ex4_1:
+	LD_PRELOAD=libzpoline.so LIBZPHOOK=logger.so touch main.c && rm main.c && echo "============="
+
+.PHONY: test_ex4_2
+test_ex4_2:
+	LD_PRELOAD=libzpoline.so LIBZPHOOK=logger.so cat /etc/hosts && echo "============="
+
+.PHONY: test_ex5
+test_ex5:
+	LD_PRELOAD=libzpoline.so LIBZPHOOK=logger.so wget http://www.google.com -q -t 1 && echo "============="
+
+.PHONY: test_ex6
+test_ex6:
+	LD_PRELOAD=libzpoline.so LIBZPHOOK=logger.so python3 -c 'import os; os.system("wget http://www.google.com -q -t 1")' && echo "============="
 
 .PHONY: asm
 asm: $(addprefix asm_, $(PROGS))
@@ -76,4 +92,4 @@ debug: all
 
 .PHONY: clean
 clean:
-	rm -f $(PROGS) $(subst so,o,$(PROGS)) $(subst so,asm,$(PROGS)) main
+	rm -f $(PROGS) $(subst so,o,$(PROGS)) $(subst so,asm,$(PROGS))
