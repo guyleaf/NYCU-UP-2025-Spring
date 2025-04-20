@@ -82,17 +82,17 @@ __attribute__((constructor)) static void __libinit()
         exit(1);
     }
 
-    fprintf(stdout, MSG_PFX "library loaded (%d, %d).\n", getuid(), getgid());
+    fprintf(stderr, MSG_PFX "library loaded.\n");
 }
 
 __attribute__((destructor)) static void __libdeinit()
 {
+    fprintf(stderr, MSG_PFX "library unloaded.\n");
+
     if (mem != NULL)
     {
         __deallocate_mmap(mem, allocated_mem_size);
     }
-
-    fprintf(stderr, MSG_PFX "library unloaded.\n");
 }
 
 static void *__allocate_mmap(void *addr, size_t *size)

@@ -12,7 +12,6 @@
 
 #define MSG_PFX "libzpoline: "
 #define MEM_MAPS_PATH "/proc/self/maps"
-#define LIBC_PATH "libc.so.6"
 #define SO_FILENAME "libzpoline.so"
 
 #define MMAP_SIZE 1024
@@ -33,24 +32,12 @@ static void __wrap_syscall();
 static void *__find_exec_addresses(size_t *num_ranges);
 static void __set_mem_permissions(void *addr, size_t size, int perms);
 
-// static void *__open_dl(const char *file);
-// static void __close_dl(void *handler);
-// static void *__get_func_from_dl(void *handler, const char *name);
 static char *__get_last_token(char *s, const char *delim);
 static void __decode_leets(const char *s, size_t length, char *buf);
 
 extern int64_t trigger_syscall(int64_t rdi, int64_t rsi, int64_t rdx,
                                int64_t rcx, int64_t r8, int64_t r9,
                                int64_t syscall_id);
-
-// typedef struct libc_funcs
-// {
-//     void *libc_ptr;
-//     int (*fprintf_ptr)(FILE *__restrict__ __stream,
-//                        const char *__restrict__ __format, ...);
-// } libc_funcs_t;
-
-// static libc_funcs_t libc;
 
 void __raw_asm()
 {
@@ -139,9 +126,6 @@ __attribute__((constructor)) static void __libinit()
     {
         UINT8_PTR(mem)[i] = 0x90;
     }
-    // #ifdef DEBUG
-    //     UINT8_PTR(mem)[NUM_NOPS - 1] = 0xcc;
-    // #endif
     offset += NUM_NOPS;
 
     // preserve redzone
@@ -178,26 +162,17 @@ __attribute__((constructor)) static void __libinit()
     // set readable & executable only
     __set_mem_permissions(mem, allocated_mem_size, PROT_READ | PROT_EXEC);
 
-    // if (libc.libc_ptr == NULL)
-    // {
-    //     libc.libc_ptr = __open_dl(LIBC_PATH);
-    //     libc.fprintf_ptr = __get_func_from_dl(libc.libc_ptr, "fprintf");
-    // }
-    // libc.fprintf_ptr(stdout, MSG_PFX "library loaded.\n");
+    fprintf(stderr, MSG_PFX "library loaded.\n");
 }
 
 __attribute__((destructor)) static void __libdeinit()
 {
+    fprintf(stderr, MSG_PFX "library unloaded.\n");
+
     if (mem != NULL)
     {
         __deallocate_mmap(mem, allocated_mem_size);
     }
-
-    // if (libc.libc_ptr != NULL)
-    // {
-    //     __close_dl(libc.libc_ptr);
-    // }
-    // printf(stderr, MSG_PFX "library unloaded.\n");
 }
 
 static void *__allocate_mmap(void *addr, size_t *size)
@@ -352,38 +327,6 @@ static void __set_mem_permissions(void *addr, size_t size, int perms)
         exit(EXIT_FAILURE);
     }
 }
-
-// static void *__open_dl(const char *file)
-// {
-//     dlerror();
-//     void *handler = dlmopen(LM_ID_NEWLM, file, RTLD_LAZY);
-//     if (handler == NULL)
-//     {
-//         fprintf(stderr, MSG_PFX "dlmopen failed - %s.\n", dlerror());
-//         exit(EXIT_FAILURE);
-//     }
-//     return handler;
-// }
-
-// static void __close_dl(void *handler)
-// {
-//     if (dlclose(handler) != 0)
-//     {
-//         fprintf(stderr, MSG_PFX "dlclose failed - %s.\n", dlerror());
-//         exit(EXIT_FAILURE);
-//     }
-// }
-
-// static void *__get_func_from_dl(void *handler, const char *name)
-// {
-//     void *func_ptr = dlsym(handler, name);
-//     if (func_ptr == NULL)
-//     {
-//         fprintf(stderr, MSG_PFX "dlsym failed - %s.\n", dlerror());
-//         exit(EXIT_FAILURE);
-//     }
-//     return func_ptr;
-// }
 
 static char *__get_last_token(char *s, const char *delim)
 {
