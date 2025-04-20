@@ -1,4 +1,6 @@
 #define _GNU_SOURCE
+#include <capstone/capstone.h>
+#include <capstone/x86.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <stdint.h>
@@ -9,14 +11,12 @@
 #include <unistd.h>
 
 #define MSG_PFX "libzpoline: "
-#define MMAP_SIZE 1024
 #define MEM_MAPS_PATH "/proc/self/maps"
 #define LIBC_PATH "libc.so.6"
 #define SO_FILENAME "libzpoline.so"
 
+#define MMAP_SIZE 1024
 #define NUM_NOPS 512
-#define SYSCALL_CODE 0x050f
-#define SYSENTER_CODE 0x340f
 
 #define SYSCALL_WRITE_ID 0x01
 
@@ -33,9 +33,9 @@ static void __wrap_syscall();
 static void *__find_exec_addresses(size_t *num_ranges);
 static void __set_mem_permissions(void *addr, size_t size, int perms);
 
-static void *__open_dl(const char *file);
-static void __close_dl(void *handler);
-static void *__get_func_from_dl(void *handler, const char *name);
+// static void *__open_dl(const char *file);
+// static void __close_dl(void *handler);
+// static void *__get_func_from_dl(void *handler, const char *name);
 static char *__get_last_token(char *s, const char *delim);
 static void __decode_leets(const char *s, size_t length, char *buf);
 
@@ -43,14 +43,14 @@ extern int64_t trigger_syscall(int64_t rdi, int64_t rsi, int64_t rdx,
                                int64_t rcx, int64_t r8, int64_t r9,
                                int64_t syscall_id);
 
-typedef struct libc_funcs
-{
-    void *libc_ptr;
-    int (*fprintf_ptr)(FILE *__restrict__ __stream,
-                       const char *__restrict__ __format, ...);
-} libc_funcs_t;
+// typedef struct libc_funcs
+// {
+//     void *libc_ptr;
+//     int (*fprintf_ptr)(FILE *__restrict__ __stream,
+//                        const char *__restrict__ __format, ...);
+// } libc_funcs_t;
 
-static libc_funcs_t libc;
+// static libc_funcs_t libc;
 
 void __raw_asm()
 {
@@ -193,10 +193,10 @@ __attribute__((destructor)) static void __libdeinit()
         __deallocate_mmap(mem, allocated_mem_size);
     }
 
-    if (libc.libc_ptr != NULL)
-    {
-        __close_dl(libc.libc_ptr);
-    }
+    // if (libc.libc_ptr != NULL)
+    // {
+    //     __close_dl(libc.libc_ptr);
+    // }
     // printf(stderr, MSG_PFX "library unloaded.\n");
 }
 
@@ -233,36 +233,62 @@ static void __deallocate_mmap(void *ptr, size_t size)
 
 static void __wrap_syscall()
 {
-    uint8_t *ptr;
+    csh handle;
+    cs_insn *insn;
     size_t num_ranges = 0;
     uintptr_t (*addr_ranges)[2] = __find_exec_addresses(&num_ranges);
+
+    // initialize capstone engine
+    if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK)
+    {
+        fprintf(stderr, MSG_PFX "cs_open failed - %s.\n",
+                cs_strerror(cs_errno(handle)));
+        exit(EXIT_FAILURE);
+    }
+    // turn on SKIPDATA mode
+    if (cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON) != CS_ERR_OK)
+    {
+        fprintf(stderr, MSG_PFX "cs_option failed - %s.\n",
+                cs_strerror(cs_errno(handle)));
+        exit(EXIT_FAILURE);
+    }
 
     for (size_t i = 0; i < num_ranges; i++)
     {
         uintptr_t start_addr = addr_ranges[i][0];
         uintptr_t end_addr = addr_ranges[i][1];
+        uintptr_t addr_range_size = end_addr - start_addr;
 
-        __set_mem_permissions((void *)start_addr, end_addr - start_addr,
+        __set_mem_permissions((void *)start_addr, addr_range_size,
                               PROT_READ | PROT_WRITE | PROT_EXEC);
 
-        // iterate each byte to identify syscall
-        for (ptr = (uint8_t *)start_addr; (uintptr_t)ptr < end_addr - 1; ptr++)
+        size_t count = cs_disasm(handle, (uint8_t *)start_addr, addr_range_size,
+                                 start_addr, 0, &insn);
+        if (count == 0)
         {
-            // syscall is 2-byte instruction
-            uint16_t *code = (uint16_t *)ptr;
-            if (*code == SYSCALL_CODE || *code == SYSENTER_CODE)
+            fprintf(stderr, MSG_PFX
+                    "cs_disasm failed - Failed to disassemble given code!.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        for (size_t i = 0; i < count; i++)
+        {
+            if (insn[i].id == X86_INS_SYSCALL)
             {
                 // replace with call *%rax
-                // FF d0
                 // little-edian
-                *code = 0xd0ff;
+                *(uint16_t *)insn[i].address = 0xd0ff;
             }
         }
 
-        __set_mem_permissions((void *)start_addr, end_addr - start_addr,
+        // release the cache memory when done
+        cs_free(insn, count);
+
+        __set_mem_permissions((void *)start_addr, addr_range_size,
                               PROT_READ | PROT_EXEC);
     }
 
+    cs_close(&handle);
     free(addr_ranges);
 }
 
@@ -327,37 +353,37 @@ static void __set_mem_permissions(void *addr, size_t size, int perms)
     }
 }
 
-static void *__open_dl(const char *file)
-{
-    dlerror();
-    void *handler = dlmopen(LM_ID_NEWLM, file, RTLD_LAZY);
-    if (handler == NULL)
-    {
-        fprintf(stderr, MSG_PFX "dlmopen failed - %s.\n", dlerror());
-        exit(EXIT_FAILURE);
-    }
-    return handler;
-}
+// static void *__open_dl(const char *file)
+// {
+//     dlerror();
+//     void *handler = dlmopen(LM_ID_NEWLM, file, RTLD_LAZY);
+//     if (handler == NULL)
+//     {
+//         fprintf(stderr, MSG_PFX "dlmopen failed - %s.\n", dlerror());
+//         exit(EXIT_FAILURE);
+//     }
+//     return handler;
+// }
 
-static void __close_dl(void *handler)
-{
-    if (dlclose(handler) != 0)
-    {
-        fprintf(stderr, MSG_PFX "dlclose failed - %s.\n", dlerror());
-        exit(EXIT_FAILURE);
-    }
-}
+// static void __close_dl(void *handler)
+// {
+//     if (dlclose(handler) != 0)
+//     {
+//         fprintf(stderr, MSG_PFX "dlclose failed - %s.\n", dlerror());
+//         exit(EXIT_FAILURE);
+//     }
+// }
 
-static void *__get_func_from_dl(void *handler, const char *name)
-{
-    void *func_ptr = dlsym(handler, name);
-    if (func_ptr == NULL)
-    {
-        fprintf(stderr, MSG_PFX "dlsym failed - %s.\n", dlerror());
-        exit(EXIT_FAILURE);
-    }
-    return func_ptr;
-}
+// static void *__get_func_from_dl(void *handler, const char *name)
+// {
+//     void *func_ptr = dlsym(handler, name);
+//     if (func_ptr == NULL)
+//     {
+//         fprintf(stderr, MSG_PFX "dlsym failed - %s.\n", dlerror());
+//         exit(EXIT_FAILURE);
+//     }
+//     return func_ptr;
+// }
 
 static char *__get_last_token(char *s, const char *delim)
 {

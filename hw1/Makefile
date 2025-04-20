@@ -4,7 +4,7 @@ SHELL 			= /bin/sh
 
 C				= gcc
 CFLAGS			= -std=c17 -Wall -Wextra
-LDFLAGS			= -ldl
+LDFLAGS			= -ldl -lcapstone
 
 prefix 			= .
 srcdir			= $(prefix)
@@ -21,14 +21,20 @@ vpath %.c $(srcdir)
 .PHONY: all
 all: main
 
-libzpoline.so: libzpoline.c
-	$(C) -nostartfiles -shared -fPIC $(CFLAGS) $(LDFLAGS) -o $@ $<
+libzpoline.so: libzpoline.o
+	$(C) -shared -o $@ $< $(LDFLAGS)
 
-libzpoline.so.1: libzpoline1.c
-	$(C) -nostartfiles -shared -fPIC $(CFLAGS) $(LDFLAGS) -o $@ $<
+libzpoline.so.%: libzpoline.o.%
+	$(C) -shared -o $@ $< $(LDFLAGS)
 
-libzpoline.so.2: libzpoline2.c
-	$(C) -nostartfiles -shared -fPIC $(CFLAGS) $(LDFLAGS) -o $@ $<
+libzpoline.o: libzpoline.c
+	$(C) -fPIC $(CFLAGS) -c -o $@ $<
+
+libzpoline.o.%: libzpoline%.c
+	$(C) -fPIC $(CFLAGS) -c -o $@ $<
+
+asm_%: %
+	objdump -d -M intel $* > $(subst so,asm,$*)
 
 main: main.c $(PROGS)
 	gcc -L. -o $@ $< $(CFLAGS) $(LDFLAGS) -lzpoline -z now
@@ -54,10 +60,13 @@ test_ex2_1:
 test_ex2_2:
 	LD_PRELOAD=libzpoline.so.2 cat 'examples/ex2-2.txt' && echo "============="
 
+.PHONY: asm
+asm: $(addprefix asm_, $(PROGS))
+
 .PHONY: debug
 debug: CFLAGS += -DDEBUG -g -Og
 debug: all
 
 .PHONY: clean
 clean:
-	rm -f $(PROGS) main
+	rm -f $(PROGS) $(subst so,o,$(PROGS)) $(subst so,asm,$(PROGS)) main
