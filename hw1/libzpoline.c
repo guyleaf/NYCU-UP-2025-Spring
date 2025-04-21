@@ -3,11 +3,14 @@
 #include <capstone/x86.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <linux/sched.h>
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #define MSG_PFX "libzpoline: "
@@ -27,7 +30,7 @@
 static void *__allocate_mmap(void *addr, size_t *size);
 static void __deallocate_mmap(void *ptr, size_t size);
 
-static void __wrap_syscall();
+static void __wrap_syscall(void);
 static void *__find_exec_addresses(size_t *num_ranges);
 static void __set_mem_permissions(void *addr, size_t size, int perms);
 
@@ -39,6 +42,10 @@ static char *__get_last_token(char *s, const char *delim);
 extern int64_t trigger_syscall(int64_t rdi, int64_t rsi, int64_t rdx,
                                int64_t rcx, int64_t r8, int64_t r9,
                                int64_t syscall_id);
+int64_t handle_syscall(int64_t rdi, int64_t rsi, int64_t rdx, int64_t rcx,
+                       int64_t r8, int64_t r9, int64_t syscall_id,
+                       int64_t retptr);
+extern void trampoline(void);
 
 static void *mem = NULL;
 static size_t allocated_mem_size = MMAP_SIZE;
@@ -52,7 +59,7 @@ typedef void (*hook_init_fn_t)(const syscall_hook_fn_t trigger_syscall,
 static void *hook_lib = NULL;
 static syscall_hook_fn_t hooked_syscall = trigger_syscall;
 
-void __raw_asm()
+void __raw_asm(void)
 {
     __asm__ volatile(
         "trigger_syscall: \t\n"
@@ -81,19 +88,9 @@ void __raw_asm()
         "pop %r12 \t\n"
         "leave \t\n"
         "ret \t\n");
-}
 
-int64_t handle_syscall(int64_t rdi, int64_t rsi, int64_t rdx, int64_t rcx,
-                       int64_t r8, int64_t r9, int64_t syscall_id)
-{
-    int64_t ret;
-    ret = hooked_syscall(rdi, rsi, rdx, rcx, r8, r9, syscall_id);
-    return ret;
-}
-
-void trampoline()
-{
     __asm__ volatile(
+        "trampoline: \t\n"
         "push %rbp \t\n"
         "mov %rsp, %rbp \t\n"
         // following thr x86_64 ABI,
@@ -117,7 +114,7 @@ void trampoline()
 
         // convert arguments from syscall to normal function
         // pass arguments in reversed order (right-to-left)
-        "sub $8, %rsp \t\n"
+        "push 136(%rbp) \t\n"
         "push %rax \t\n"
         "mov %r10, %rcx \t\n"
         "call handle_syscall \t\n"
@@ -135,10 +132,52 @@ void trampoline()
         "pop %r9 \t\n"
         "pop %r10 \t\n"
         // mov %rbp, %rsp; pop %rbp
-        "leave \t\n");
+        "leave \t\n"
+        // remove redzone
+        "add $128, %rsp \n\t"
+        "ret \t\n");
 }
 
-__attribute__((constructor)) static void __libinit()
+int64_t handle_syscall(int64_t rdi, int64_t rsi, int64_t rdx, int64_t rcx,
+                       int64_t r8, int64_t r9, int64_t syscall_id,
+                       int64_t retptr)
+{
+    // clone-reload syscalls may create a new stack by parent process (share the
+    // same address space but diff region) in this case, the new stack will not
+    // have valid return address (pushed in trampoline). so, we have to push it
+    // to the child stack.
+    switch (syscall_id)
+    {
+        case SYS_clone:
+        {
+            if (rdi & CLONE_VM)
+            {  // pthread creation
+                /* push return address to the stack */
+                // __asm__("int3");
+                rsi -= sizeof(uintptr_t);
+                *((uintptr_t *)rsi) = retptr;
+            }
+            break;
+        }
+        case SYS_clone3:
+        {
+            struct clone_args *cargs = (struct clone_args *)rdi;
+            if (cargs->flags & CLONE_VM)
+            {
+                // __asm__("int3");
+                cargs->stack_size -= sizeof(uintptr_t);
+                *((uintptr_t *)(cargs->stack + cargs->stack_size)) = retptr;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+
+    return hooked_syscall(rdi, rsi, rdx, rcx, r8, r9, syscall_id);
+}
+
+__attribute__((constructor)) static void __libinit(void)
 {
     size_t offset = 0;
     if (mem == NULL)
@@ -154,6 +193,16 @@ __attribute__((constructor)) static void __libinit()
         UINT8_PTR(mem)[i] = 0x90;
     }
     offset += NUM_NOPS;
+
+    // preserve redzone
+    // sub %rsp, $0x80
+    // 48 (REX.W, 64-bit operand mode) 81 ec 80 00 00 00
+    uint8_t sub_inst[] = {0x48, 0x81, 0xec, 0x80, 0, 0, 0};
+    for (size_t i = 0; i < sizeof(sub_inst); i++)
+    {
+        UINT8_PTR(mem)[offset + i] = sub_inst[i];
+    }
+    offset += sizeof(sub_inst);
 
     // assign the address of trampoline function
     // mov %r11, addr of trampoline function
@@ -195,7 +244,7 @@ __attribute__((constructor)) static void __libinit()
     hooked_syscall = __hooked_syscall;
 }
 
-__attribute__((destructor)) static void __libdeinit()
+__attribute__((destructor)) static void __libdeinit(void)
 {
     // restore hooked_syscall to avoid SIGSEGV
     hooked_syscall = trigger_syscall;
@@ -243,7 +292,7 @@ static void __deallocate_mmap(void *ptr, size_t size)
     }
 }
 
-static void __wrap_syscall()
+static void __wrap_syscall(void)
 {
     csh handle;
     cs_insn *insn;
