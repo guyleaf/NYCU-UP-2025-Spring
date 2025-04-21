@@ -43,7 +43,9 @@ asm_%: %
 
 .PHONY: download
 download:
-	cd data && wget https://up.zoolab.org/unixprog/hw01/examples.tgz && tar xf examples.tgz
+	mkdir -p /data/hw1/examples && ln -s /data/hw1/examples
+download:
+	cd examples && wget https://up.zoolab.org/unixprog/hw01/examples.tgz && tar xf examples.tgz
 
 .PHONY: test
 test: all | test_ex1 test_ex2_1 test_ex2_2 test_ex3 test_ex4_1 test_ex4_2 test_ex5 test_ex6
