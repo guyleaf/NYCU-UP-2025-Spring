@@ -34,7 +34,7 @@ libzpoline.so.%: libzpoline%.c
 # 	$(C) -fPIC -c -o $@ $< $(CFLAGS)
 
 logger.so: logger.c
-	$(C) -shared -fPIC -o $@ $< $(CFLAGS) $(LDFLAGS)
+	$(C) -shared -fPIC -o $@ $< -std=gnu17 -Wall -Wextra
 
 asm_%: %
 	objdump -d -M intel $* > $(subst so,asm,$*)
@@ -92,4 +92,4 @@ debug: all
 
 .PHONY: clean
 clean:
-	rm -f $(PROGS) $(subst so,o,$(PROGS)) $(subst so,asm,$(PROGS))
+	rm -f $(PROGS) $(subst so,o,$(PROGS)) $(subst so,asm,$(PROGS)) index.html*
