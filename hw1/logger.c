@@ -34,6 +34,11 @@ static void __log_execve(int64_t pathname, int64_t argv, int64_t envp,
 static void __log_openat(int64_t dirfd, int64_t file, int64_t flags,
                          int64_t mode, int64_t r8, int64_t r9, int64_t rax,
                          int64_t ret);
+static void __log_clone(int64_t fn, int64_t stack, int64_t flags, int64_t r10,
+                        int64_t r8, int64_t r9, int64_t rax, int64_t ret);
+static void __log_clone3(int64_t cl_args, int64_t size, int64_t rdx,
+                         int64_t r10, int64_t r8, int64_t r9, int64_t rax,
+                         int64_t ret);
 
 static syscall_hook_fn_t original_syscall = NULL;
 static log_fn_t logger_map[NUM_SYSCALLS];
@@ -76,6 +81,10 @@ void __hook_init(const syscall_hook_fn_t trigger_syscall,
     logger_map[SYS_execve] = __log_execve;
     logging_pos[SYS_execve] = false;
     logger_map[SYS_openat] = __log_openat;
+    logger_map[SYS_clone] = __log_clone;
+    logging_pos[SYS_clone] = false;
+    logger_map[SYS_clone3] = __log_clone3;
+    logging_pos[SYS_clone3] = false;
 }
 
 static void __log_rw(const char *fname, int fd, uint8_t *buf, size_t count,
@@ -213,4 +222,25 @@ static void __log_openat(int64_t dirfd, int64_t file, int64_t flags,
 
     fprintf(stderr, LOG_PFX "openat(%s, \"%s\", %#x, %#o) = %d\n", fd_buf,
             (char *)file, (int)flags, (mode_t)mode, (int)ret);
+}
+
+static void __log_clone(int64_t fn, int64_t stack, int64_t flags,
+                        __attribute__((unused)) int64_t r10,
+                        __attribute__((unused)) int64_t r8,
+                        __attribute__((unused)) int64_t r9,
+                        __attribute__((unused)) int64_t rax, int64_t ret)
+{
+    fprintf(stderr, LOG_PFX "clone(%p, %p, %d) = %d\n", (void *)fn,
+            (void *)stack, (int)flags, (int)ret);
+}
+
+static void __log_clone3(int64_t cl_args, int64_t size,
+                         __attribute__((unused)) int64_t rdx,
+                         __attribute__((unused)) int64_t r10,
+                         __attribute__((unused)) int64_t r8,
+                         __attribute__((unused)) int64_t r9,
+                         __attribute__((unused)) int64_t rax, int64_t ret)
+{
+    fprintf(stderr, LOG_PFX "clone3(%p, %lu) = %ld\n", (void *)cl_args,
+            (size_t)size, (long)ret);
 }

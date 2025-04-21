@@ -28,7 +28,7 @@ static size_t allocated_mem_size = MMAP_SIZE;
 static void *__allocate_mmap(void *addr, size_t *size);
 static void __deallocate_mmap(void *ptr, size_t size);
 
-static void __wrap_syscall();
+static void __wrap_syscall(void);
 static void *__find_exec_addresses(size_t *num_ranges);
 static void __set_mem_permissions(void *addr, size_t size, int perms);
 
@@ -38,13 +38,33 @@ static void __decode_leets(const char *s, size_t length, char *buf);
 extern int64_t trigger_syscall(int64_t rdi, int64_t rsi, int64_t rdx,
                                int64_t rcx, int64_t r8, int64_t r9,
                                int64_t syscall_id);
+extern void trampoline(void);
 
-void __raw_asm()
+void __raw_asm(void)
 {
     __asm__ volatile(
         "trigger_syscall: \t\n"
+        // convert arguments from normal function to syscall
+        // pass arguments in reversed order (right-to-left)
+        // get syscall id
+        "mov 8(%rsp), %rax \t\n"
+        "mov %rcx, %r10 \t\n"
+        "syscall \t\n"
+        "ret \t\n");
+
+    __asm__ volatile(
+        "trampoline: \t\n"
         "push %rbp \t\n"
         "mov %rsp, %rbp \t\n"
+        // following thr x86_64 ABI,
+        // preserve all general-purpose registers (caller-saved) before syscall
+        // except %rcx,%r11,%rax
+        "push %r10 \t\n"
+        "push %r9 \t\n"
+        "push %r8 \t\n"
+        "push %rdi \t\n"
+        "push %rsi \t\n"
+        "push %rdx \t\n"
         "push %r12 \t\n"
 
         // perform 16-byte alignment
@@ -55,18 +75,29 @@ void __raw_asm()
         "sub %r11, %r12 \t\n"
         "sub %r12, %rsp \t\n"
 
-        // convert arguments from normal function to syscall
+        // convert arguments from syscall to normal function
         // pass arguments in reversed order (right-to-left)
-        // get syscall id
-        "mov 16(%rbp), %rax \t\n"
-        "mov %rcx, %r10 \t\n"
-        "syscall \t\n"
+        "push 136(%rbp) \t\n"
+        "push %rax \t\n"
+        "mov %r10, %rcx \t\n"
+        "call handle_syscall \t\n"
+        "add $16, %rsp \t\n"
 
         // restore rsp
         "add %r12, %rsp \t\n"
 
+        // restore registers
         "pop %r12 \t\n"
+        "pop %rdx \t\n"
+        "pop %rsi \t\n"
+        "pop %rdi \t\n"
+        "pop %r8 \t\n"
+        "pop %r9 \t\n"
+        "pop %r10 \t\n"
+        // mov %rbp, %rsp; pop %rbp
         "leave \t\n"
+        // remove redzone
+        "add $128, %rsp \n\t"
         "ret \t\n");
 }
 
@@ -97,54 +128,7 @@ int64_t handle_syscall(int64_t rdi, int64_t rsi, int64_t rdx, int64_t rcx,
     return ret;
 }
 
-void trampoline()
-{
-    __asm__ volatile(
-        "push %rbp \t\n"
-        "mov %rsp, %rbp \t\n"
-        // following thr x86_64 ABI,
-        // preserve all general-purpose registers (caller-saved) before syscall
-        // except %rcx,%r11,%rax
-        "push %r10 \t\n"
-        "push %r9 \t\n"
-        "push %r8 \t\n"
-        "push %rdi \t\n"
-        "push %rsi \t\n"
-        "push %rdx \t\n"
-        "push %r12 \t\n"
-
-        // perform 16-byte alignment
-        "mov $0xfffffffffffffff0, %r11 \t\n"
-        "mov %rsp, %r12 \t\n"
-        "and %rsp, %r11 \t\n"
-        // %r12: mod 16
-        "sub %r11, %r12 \t\n"
-        "sub %r12, %rsp \t\n"
-
-        // convert arguments from syscall to normal function
-        // pass arguments in reversed order (right-to-left)
-        "sub $8, %rsp \t\n"
-        "push %rax \t\n"
-        "mov %r10, %rcx \t\n"
-        "call handle_syscall \t\n"
-        "add $16, %rsp \t\n"
-
-        // restore rsp
-        "add %r12, %rsp \t\n"
-
-        // restore registers
-        "pop %r12 \t\n"
-        "pop %rdx \t\n"
-        "pop %rsi \t\n"
-        "pop %rdi \t\n"
-        "pop %r8 \t\n"
-        "pop %r9 \t\n"
-        "pop %r10 \t\n"
-        // mov %rbp, %rsp; pop %rbp
-        "leave \t\n");
-}
-
-__attribute__((constructor)) static void __libinit()
+__attribute__((constructor)) static void __libinit(void)
 {
     size_t offset = 0;
     if (mem == NULL)
@@ -162,12 +146,12 @@ __attribute__((constructor)) static void __libinit()
     // preserve redzone
     // sub %rsp, $0x80
     // 48 (REX.W, 64-bit operand mode) 81 ec 80 00 00 00
-    // uint8_t sub_inst[] = {0x48, 0x81, 0xec, 0x80, 0, 0, 0};
-    // for (size_t i = 0; i < sizeof(sub_inst); i++)
-    // {
-    //     UINT8_PTR(mem)[offset + i] = sub_inst[i];
-    // }
-    // offset += sizeof(sub_inst);
+    uint8_t sub_inst[] = {0x48, 0x81, 0xec, 0x80, 0, 0, 0};
+    for (size_t i = 0; i < sizeof(sub_inst); i++)
+    {
+        UINT8_PTR(mem)[offset + i] = sub_inst[i];
+    }
+    offset += sizeof(sub_inst);
 
     // assign the address of trampoline function
     // mov %r11, addr of trampoline function
@@ -196,7 +180,7 @@ __attribute__((constructor)) static void __libinit()
     fprintf(stderr, MSG_PFX "library loaded.\n");
 }
 
-__attribute__((destructor)) static void __libdeinit()
+__attribute__((destructor)) static void __libdeinit(void)
 {
     fprintf(stderr, MSG_PFX "library unloaded.\n");
 
@@ -237,7 +221,7 @@ static void __deallocate_mmap(void *ptr, size_t size)
     }
 }
 
-static void __wrap_syscall()
+static void __wrap_syscall(void)
 {
     csh handle;
     cs_insn *insn;

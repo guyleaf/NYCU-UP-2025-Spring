@@ -63,30 +63,12 @@ void __raw_asm(void)
 {
     __asm__ volatile(
         "trigger_syscall: \t\n"
-        "push %rbp \t\n"
-        "mov %rsp, %rbp \t\n"
-        "push %r12 \t\n"
-
-        // perform 16-byte alignment
-        "mov $0xfffffffffffffff0, %r11 \t\n"
-        "mov %rsp, %r12 \t\n"
-        "and %rsp, %r11 \t\n"
-        // %r12: mod 16
-        "sub %r11, %r12 \t\n"
-        "sub %r12, %rsp \t\n"
-
         // convert arguments from normal function to syscall
         // pass arguments in reversed order (right-to-left)
         // get syscall id
-        "mov 16(%rbp), %rax \t\n"
+        "mov 8(%rsp), %rax \t\n"
         "mov %rcx, %r10 \t\n"
         "syscall \t\n"
-
-        // restore rsp
-        "add %r12, %rsp \t\n"
-
-        "pop %r12 \t\n"
-        "leave \t\n"
         "ret \t\n");
 
     __asm__ volatile(
@@ -142,10 +124,10 @@ int64_t handle_syscall(int64_t rdi, int64_t rsi, int64_t rdx, int64_t rcx,
                        int64_t r8, int64_t r9, int64_t syscall_id,
                        int64_t retptr)
 {
-    // clone-reload syscalls may create a new stack by parent process (share the
-    // same address space but diff region) in this case, the new stack will not
-    // have valid return address (pushed in trampoline). so, we have to push it
-    // to the child stack.
+    // clone-related syscalls may create a new stack by parent process (share
+    // the same address space but diff region) in this case, the new stack will
+    // not have valid return address (before calling trampoline). so, we have to
+    // push it to the child stack.
     switch (syscall_id)
     {
         case SYS_clone:
@@ -371,7 +353,6 @@ static void *__find_exec_addresses(size_t *num_ranges)
     size_t size = 0;
     while ((num_chars = getline(&line, &size, stream)) != -1)
     {
-        // fprintf(stderr, MSG_PFX "%s\n", line);
         // first two columns: address range, permission
         char *addr_range = strtok(line, " \t\n");
         char *perms = strtok(NULL, " \t\n");
