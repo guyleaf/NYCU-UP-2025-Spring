@@ -87,12 +87,15 @@ void __raw_asm(void)
         "push %r12 \t\n"
 
         // perform 16-byte alignment
-        "mov $0xfffffffffffffff0, %r11 \t\n"
+        // %r12: %rsp(old)
         "mov %rsp, %r12 \t\n"
-        "and %rsp, %r11 \t\n"
-        // %r12: mod 16
-        "sub %r11, %r12 \t\n"
-        "sub %r12, %rsp \t\n"
+        // %rsp: multiples of 16-byte
+        "mov $0xfffffffffffffff0, %r11 \t\n"
+        "and %r11, %rsp \t\n"
+        // %r12: %rsp(old) - %rsp = 0~15
+        "sub %rsp, %r12 \t\n"
+        // avoid overridding memory in the range %r12
+        "sub $16, %rsp \t\n"
 
         // convert arguments from syscall to normal function
         // pass arguments in reversed order (right-to-left)
@@ -100,9 +103,10 @@ void __raw_asm(void)
         "push %rax \t\n"
         "mov %r10, %rcx \t\n"
         "call handle_syscall \t\n"
-        "add $16, %rsp \t\n"
 
         // restore rsp
+        "add $32, %rsp \t\n"
+        // %rsp + %r12 = %rsp(old)
         "add %r12, %rsp \t\n"
 
         // restore registers
