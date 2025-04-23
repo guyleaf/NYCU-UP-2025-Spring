@@ -43,13 +43,14 @@ static void __log_clone3(int64_t cl_args, int64_t size, int64_t rdx,
 static syscall_hook_fn_t original_syscall = NULL;
 static log_fn_t logger_map[NUM_SYSCALLS];
 static bool logging_pos[NUM_SYSCALLS];
+static bool initialized = false;
 
 static int64_t syscall_hook_fn(int64_t rdi, int64_t rsi, int64_t rdx,
                                int64_t r10, int64_t r8, int64_t r9, int64_t rax)
 {
     int64_t ret = 0;
     log_fn_t log_fn;
-    if (rax < NUM_SYSCALLS && (log_fn = logger_map[rax]) != NULL)
+    if (initialized && rax < NUM_SYSCALLS && (log_fn = logger_map[rax]) != NULL)
     {
         if (!logging_pos[rax])
         {
@@ -85,6 +86,7 @@ void __hook_init(const syscall_hook_fn_t trigger_syscall,
     logging_pos[SYS_clone] = false;
     logger_map[SYS_clone3] = __log_clone3;
     logging_pos[SYS_clone3] = false;
+    initialized = true;
 }
 
 static void __log_rw(const char *fname, int fd, uint8_t *buf, size_t count,
