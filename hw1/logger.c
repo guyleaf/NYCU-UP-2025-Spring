@@ -215,15 +215,19 @@ static void __log_openat(int64_t dirfd, int64_t file, int64_t flags,
                          __attribute__((unused)) int64_t r9,
                          __attribute__((unused)) int64_t rax, int64_t ret)
 {
-    char fd_buf[50] = "AT_FDCWD";
     int fd = (int)dirfd;
-    if (fd != AT_FDCWD)
-    {
-        snprintf(fd_buf, sizeof(fd_buf), "%d", fd);
-    }
 
-    fprintf(stderr, LOG_PFX "openat(%s, \"%s\", %#x, %#o) = %d\n", fd_buf,
-            (char *)file, (int)flags, (mode_t)mode, (int)ret);
+    fprintf(stderr, LOG_PFX "openat(");
+    if (fd == AT_FDCWD)
+    {
+        fprintf(stderr, "AT_FDCWD");
+    }
+    else
+    {
+        fprintf(stderr, "%d", fd);
+    }
+    fprintf(stderr, ", \"%s\", %#x, %#o) = %d\n", (const char *)file,
+            (int)flags, (mode_t)mode, (int)ret);
 }
 
 static void __log_clone(int64_t fn, int64_t stack, int64_t flags,
