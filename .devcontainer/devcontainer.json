@@ -11,7 +11,8 @@
     "ghcr.io/trunk-io/devcontainer-feature/trunk": "latest"
   },
   // reference: https://github.com/chunying/up-runtime/blob/main/start.sh#L21
-  "capAdd": ["SYS_ADMIN", "NET_ADMIN", "DAC_READ_SEARCH"],
+  "capAdd": ["SYS_ADMIN", "SYS_RAWIO", "NET_ADMIN", "DAC_READ_SEARCH"],
+  "securityOpt": ["seccomp=unconfined", "systempaths=unconfined"],
   "updateContentCommand": "trunk install --ci",
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": {
@@ -19,7 +20,7 @@
     "Remove .trunk symbolic links": "rm -f .trunk/tools .trunk/logs .trunk/notifications .trunk/out && trunk --version"
   },
   "containerEnv": {
-    "LD_LIBRARY_PATH": "${containerWorkspaceFolder}/lab3/sample"
+    "LD_LIBRARY_PATH": "${containerWorkspaceFolder}/hw1:${containerWorkspaceFolder}/lab3/sample"
   },
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   // "remoteUser": "root"

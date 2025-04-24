@@ -1,0 +1,7 @@
+main
+*.o.*
+*.so.*
+*.asm
+*.asm.*
+index.html
+index.html.*
