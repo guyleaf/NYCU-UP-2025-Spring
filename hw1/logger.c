@@ -175,22 +175,25 @@ static void __log_connect(int64_t sockfd, int64_t addr, int64_t addrlen,
         case AF_INET6:
         {
             in_port_t port;
+            char buf[INET6_ADDRSTRLEN];
             if (sock_addr->sa_family == AF_INET)
             {
                 const struct sockaddr_in *in_sock_addr =
                     (const struct sockaddr_in *)sock_addr;
+                struct in_addr addr = in_sock_addr->sin_addr;
                 port = in_sock_addr->sin_port;
+                inet_ntop(sock_addr->sa_family, &addr, buf, addrlen);
             }
             else
             {
                 const struct sockaddr_in6 *in6_sock_addr =
                     (const struct sockaddr_in6 *)sock_addr;
+                struct in6_addr addr = in6_sock_addr->sin6_addr;
                 port = in6_sock_addr->sin6_port;
+                inet_ntop(sock_addr->sa_family, &addr, buf, addrlen);
             }
 
-            char buf[INET6_ADDRSTRLEN];
-            inet_ntop(sock_addr->sa_family, sock_addr, buf, addrlen);
-            fprintf(stderr, "%s:%hu", buf, port);
+            fprintf(stderr, "%s:%hu", buf, ntohs(port));
             break;
         }
         default:
