@@ -362,14 +362,16 @@ static void *__find_exec_addresses(size_t *num_ranges)
         char *perms = strtok(NULL, " \t\n");
         char *file = __get_last_token(NULL, " \t\n");
 
-        // skip syscalls in libzpoline
-        if (strstr(file, SO_FILENAME) != NULL)
+        // skip syscalls in libzpoline, [vdso], [vsyscall] memory
+        if (strstr(file, SO_FILENAME) != NULL || strcmp(file, "[vdso]") == 0 ||
+            strcmp(file, "[vsyscall]") == 0)
         {
             continue;
         }
 
         // check permissions have executable flag
-        if (strcmp(perms, "r-xp") == 0)
+        // if (strcmp(perms, "r-xp") == 0)
+        if (perms[2] == 'x')
         {
             __num_ranges++;
             addr_ranges =
