@@ -73,11 +73,22 @@ void __raw_asm(void)
 
     __asm__ volatile(
         "trampoline: \t\n"
+        // WORKAROUND: if syscall is vfork, skip hook.
+        // the child spawned by vfork will use the memory space of parent
+        // process. so, the data in the stack will be broken.
+        "cmp $0x3a, %rax \t\n"
+        "jne trampoline_normal \t\n"
+        "add $128, %rsp \n\t"
+        "pop %rsi \t\n"
+        "syscall \t\n"
+        "push %rsi \t\n"
+        "ret \t\n"
+        "trampoline_normal: \t\n"
         "push %rbp \t\n"
         "mov %rsp, %rbp \t\n"
-        // following thr x86_64 ABI,
-        // preserve all general-purpose registers (caller-saved) before syscall
-        // except %rcx,%r11,%rax
+        // following the x86_64 ABI, syscall will only use %rcx, %r11, %rax.
+        // because we may modify any registers, need to preserve all
+        // general-purpose registers (caller-saved) before hook.
         "push %r10 \t\n"
         "push %r9 \t\n"
         "push %r8 \t\n"
@@ -226,7 +237,7 @@ __attribute__((constructor)) static void __libinit(void)
         hook_init(trigger_syscall, &__hooked_syscall);
         fprintf(stderr, " done.\n");
     }
-    fprintf(stderr, MSG_PFX "library loaded.\n");
+    fprintf(stderr, MSG_PFX "library loaded, pid=%d.\n", getpid());
     hooked_syscall = __hooked_syscall;
 }
 
@@ -235,7 +246,7 @@ __attribute__((destructor)) static void __libdeinit(void)
     // restore hooked_syscall to avoid SIGSEGV
     hooked_syscall = trigger_syscall;
 
-    fprintf(stderr, MSG_PFX "library unloaded.\n");
+    fprintf(stderr, MSG_PFX "library unloaded, pid=%d.\n", getpid());
 
     if (hook_lib != NULL)
     {
