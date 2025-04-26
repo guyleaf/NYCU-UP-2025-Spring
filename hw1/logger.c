@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #define NUM_SYSCALLS 548
-#define LOG_PFX "[logger] "
+#define LOG_PFX "[logger][PPID=%d,PID=%d] "
 
 typedef int64_t (*syscall_hook_fn_t)(int64_t, int64_t, int64_t, int64_t,
                                      int64_t, int64_t, int64_t);
@@ -39,6 +39,8 @@ static void __log_clone(int64_t fn, int64_t stack, int64_t flags, int64_t r10,
 static void __log_clone3(int64_t cl_args, int64_t size, int64_t rdx,
                          int64_t r10, int64_t r8, int64_t r9, int64_t rax,
                          int64_t ret);
+static void __log_vfork(int64_t rdi, int64_t rsi, int64_t rdx, int64_t r10,
+                        int64_t r8, int64_t r9, int64_t rax, int64_t ret);
 
 static syscall_hook_fn_t original_syscall = NULL;
 static log_fn_t logger_map[NUM_SYSCALLS];
@@ -83,9 +85,11 @@ void __hook_init(const syscall_hook_fn_t trigger_syscall,
     logging_pos[SYS_execve] = false;
     logger_map[SYS_openat] = __log_openat;
     logger_map[SYS_clone] = __log_clone;
-    logging_pos[SYS_clone] = false;
+    logging_pos[SYS_clone] = true;
     logger_map[SYS_clone3] = __log_clone3;
-    logging_pos[SYS_clone3] = false;
+    logging_pos[SYS_clone3] = true;
+    logger_map[SYS_vfork] = __log_vfork;
+    logging_pos[SYS_vfork] = true;
     initialized = true;
 }
 
@@ -93,7 +97,7 @@ static void __log_rw(const char *fname, int fd, uint8_t *buf, size_t count,
                      ssize_t ret, size_t output_size)
 {
     size_t __output_size = output_size > 32 ? 32 : output_size;
-    fprintf(stderr, LOG_PFX "%s(%d, \"", fname, (int)fd);
+    fprintf(stderr, LOG_PFX "%s(%d, \"", getppid(), getpid(), fname, (int)fd);
     for (size_t i = 0; i < __output_size; i++)
     {
         uint8_t byte = buf[i];
@@ -161,7 +165,7 @@ static void __log_connect(int64_t sockfd, int64_t addr, int64_t addrlen,
     const struct sockaddr *sock_addr = (struct sockaddr *)addr;
     socklen_t sock_len = (socklen_t)addrlen;
 
-    fprintf(stderr, LOG_PFX "connect(%d, \"", fd);
+    fprintf(stderr, LOG_PFX "connect(%d, \"", getppid(), getpid(), fd);
     switch (sock_addr->sa_family)
     {
         case AF_UNIX:
@@ -209,8 +213,8 @@ static void __log_execve(int64_t pathname, int64_t argv, int64_t envp,
                          __attribute__((unused)) int64_t rax,
                          __attribute__((unused)) int64_t ret)
 {
-    fprintf(stderr, LOG_PFX "execve(\"%s\", %p, %p)\n", (const char *)pathname,
-            (char *const)argv, (char *const)envp);
+    fprintf(stderr, LOG_PFX "execve(\"%s\", %p, %p)\n", getppid(), getpid(),
+            (const char *)pathname, (char *const)argv, (char *const)envp);
 }
 
 static void __log_openat(int64_t dirfd, int64_t file, int64_t flags,
@@ -220,7 +224,7 @@ static void __log_openat(int64_t dirfd, int64_t file, int64_t flags,
 {
     int fd = (int)dirfd;
 
-    fprintf(stderr, LOG_PFX "openat(");
+    fprintf(stderr, LOG_PFX "openat(", getppid(), getpid());
     if (fd == AT_FDCWD)
     {
         fprintf(stderr, "AT_FDCWD");
@@ -239,8 +243,8 @@ static void __log_clone(int64_t fn, int64_t stack, int64_t flags,
                         __attribute__((unused)) int64_t r9,
                         __attribute__((unused)) int64_t rax, int64_t ret)
 {
-    fprintf(stderr, LOG_PFX "clone(%p, %p, %d) = %d\n", (void *)fn,
-            (void *)stack, (int)flags, (int)ret);
+    fprintf(stderr, LOG_PFX "clone(%p, %p, %d) = %d\n", getppid(), getpid(),
+            (void *)fn, (void *)stack, (int)flags, (int)ret);
 }
 
 static void __log_clone3(int64_t cl_args, int64_t size,
@@ -250,6 +254,17 @@ static void __log_clone3(int64_t cl_args, int64_t size,
                          __attribute__((unused)) int64_t r9,
                          __attribute__((unused)) int64_t rax, int64_t ret)
 {
-    fprintf(stderr, LOG_PFX "clone3(%p, %lu) = %ld\n", (void *)cl_args,
-            (size_t)size, (long)ret);
+    fprintf(stderr, LOG_PFX "clone3(%p, %lu) = %ld\n", getppid(), getpid(),
+            (void *)cl_args, (size_t)size, (long)ret);
+}
+
+static void __log_vfork(__attribute__((unused)) int64_t rdi,
+                        __attribute__((unused)) int64_t rsi,
+                        __attribute__((unused)) int64_t rdx,
+                        __attribute__((unused)) int64_t r10,
+                        __attribute__((unused)) int64_t r8,
+                        __attribute__((unused)) int64_t r9,
+                        __attribute__((unused)) int64_t rax, int64_t ret)
+{
+    fprintf(stderr, LOG_PFX "vfork() = %ld\n", getppid(), getpid(), (long)ret);
 }
