@@ -331,6 +331,8 @@ static void __wrap_syscall(void)
 
         for (size_t i = 0; i < count; i++)
         {
+            // TODO: move redzone from rsp~rsp-0x80 to rsp-8~rsp-0x88
+            // avoid the return address override the redzone (call *%rax)
             if (insn[i].id == X86_INS_SYSCALL)
             {
                 // replace with call *%rax
