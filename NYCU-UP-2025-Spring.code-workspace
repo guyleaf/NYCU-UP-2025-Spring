@@ -21,6 +21,10 @@
 			{
 				"name": "Linux-hw1",
 				"makeDirectory": "${workspaceFolder}/hw1",
+			},
+			{
+				"name": "Linux-lab4",
+				"makeDirectory": "${workspaceFolder}/lab4/chals",
 			}
 		],
 		"[c]": {
@@ -130,7 +134,13 @@
 			"dlfcn.h": "c",
 			"stdio.h": "c",
 			"mman.h": "c",
-			"stddef.h": "c"
+			"stddef.h": "c",
+			"stdint-gcc.h": "c",
+			"capstone.h": "c",
+			"x86.h": "c",
+			"fcntl.h": "c",
+			"signal.h": "c",
+			"sigset_t.h": "c"
 		}
 	}
 }
