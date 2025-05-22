@@ -15,8 +15,8 @@ examplesdir 	= $(prefix)/examples/hw2_testing_program
 #### End of system configuration section. ####
 
 PROGS			= sdb
-SRCS			= ptools.cpp
-INCLUDES		= $(SRCS:.cpp=.h)
+SRCS			= ptools.cpp utils.cpp
+INCLUDES		= $(SRCS:.cpp=.h) sdb.h
 OBJS			= $(SRCS:.cpp=.o)
 
 # search dependencies

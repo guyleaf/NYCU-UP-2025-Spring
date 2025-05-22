@@ -3,7 +3,6 @@
 
 namespace sdb
 {
-    
 }
 
 #endif
