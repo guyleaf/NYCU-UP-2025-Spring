@@ -14,6 +14,7 @@ std::string rstrip(const std::string& string);
 std::string strip(const std::string& string);
 
 void kill_and_wait(pid_t pid, int sig);
+bool wait_pid(pid_t pid, int* status, int options);
 
 }  // namespace sdb
 

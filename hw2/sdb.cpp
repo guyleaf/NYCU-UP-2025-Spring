@@ -1,4 +1,4 @@
-#include "sdb.h"
+#include "sdb.hpp"
 
 #include <sys/ptrace.h>
 #include <sys/wait.h>
@@ -11,19 +11,14 @@
 #include <memory>
 #include <string>
 
-struct debugger_state
-{
-    std::string program;
-    pid_t pid;
-    // TODO: base address
-    // TODO: entry point
+void add_breakpoint(sdb::program_t& program_ptr, uintptr_t address) {}
 
-    // TODO: map from index to breakpoints
-    // TODO: unordered_map from address to index/breakpoint
-};
+void remove_breakpoint(sdb::program_t& program_ptr, uintptr_t address) {}
 
-// load the program and stopped to wait for the tracer
-std::unique_ptr<debugger_state> load_program(std::string program)
+void print_instructions() {}
+
+// load the program
+std::unique_ptr<sdb::program_t> load_program(std::string program)
 {
     pid_t pid;
     if ((pid = fork()) < 0)
@@ -35,7 +30,7 @@ std::unique_ptr<debugger_state> load_program(std::string program)
     // child process
     if (pid == 0)
     {
-        char *const argv[] = {program.data()};
+        char* const argv[] = {program.data()};
         if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0)
         {
             std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
@@ -49,14 +44,15 @@ std::unique_ptr<debugger_state> load_program(std::string program)
     else
     {
         int status;
-        if (waitpid(pid, &status, 0) < 0)
+        if (!sdb::wait_pid(pid, &status, 0))
         {
-            std::cerr << "** waitpid failed - " << strerror(errno) << std::endl;
             return nullptr;
         }
 
         if (WIFEXITED(status) || WIFSIGNALED(status))
         {
+            std::cerr << "** waitpid failed - the program is exited."
+                      << std::endl;
             return nullptr;
         }
         if (!WIFSTOPPED(status))
@@ -74,33 +70,43 @@ std::unique_ptr<debugger_state> load_program(std::string program)
         return nullptr;
     }
 
-    // TODO: find and store the base address, entry point
-    // TODO: set the breakpoint at entry point
+    auto program_ptr = std::make_unique<sdb::program_t>();
+    program_ptr->program = program;
+    program_ptr->pid = pid;
+
+    sdb::load_maps(pid, program_ptr->maps);
+    sdb::load_auxvs(pid, program_ptr->auxvs);
+
+    // set the breakpoint at entry point
+    add_breakpoint(*program_ptr, program_ptr->entry_point_address());
 
     if (ptrace(PTRACE_CONT, pid, 0, 0) < 0)
     {
-        ptrace(PTRACE_KILL, pid, 0, 0);
+        std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
         sdb::kill_and_wait(pid, SIGKILL);
         return nullptr;
     }
 
-    auto state_ptr = std::make_unique<debugger_state>();
-    state_ptr->program = program;
-    state_ptr->pid = pid;
-    return state_ptr;
+    // TODO: wait until reach the breakpoint
+
+    // TODO: print 5 instructuions
+
+    return program_ptr;
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, const char* argv[])
 {
+    int wait_status;
     std::string line;
-    std::unique_ptr<debugger_state> state_ptr = nullptr;
+    std::unique_ptr<sdb::program_t> program_ptr = nullptr;
 
     if (argc > 1)
     {
-        state_ptr = load_program(argv[1]);
+        program_ptr = load_program(argv[1]);
+        return 0;
     }
 
-    while (true)
+    do
     {
         std::cout << sdb::MSG_PREFIX;
         std::getline(std::cin, line);
@@ -116,7 +122,12 @@ int main(int argc, const char *argv[])
 
         // TODO: parse the command
 
-        // TODO: handle load
-    }
+        // TODO: handle the command
+
+        if (!sdb::wait_pid(program_ptr->pid, &wait_status, 0))
+        {
+            return EXIT_FAILURE;
+        }
+    } while (WIFSTOPPED(wait_status));
     return 0;
 }

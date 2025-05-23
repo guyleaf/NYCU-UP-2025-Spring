@@ -15,8 +15,8 @@ examplesdir 	= $(prefix)/examples/hw2_testing_program
 #### End of system configuration section. ####
 
 PROGS			= sdb
-SRCS			= ptools.cpp utils.cpp
-INCLUDES		= $(SRCS:.cpp=.h) sdb.h
+SRCS			= breakpoint.cpp ptools.cpp utils.cpp
+INCLUDES		= $(SRCS:.cpp=.h) sdb.hpp auxv.h
 OBJS			= $(SRCS:.cpp=.o)
 
 # search dependencies
@@ -27,7 +27,7 @@ vpath %.h $(includesdir)
 all: $(PROGS)
 
 sdb: sdb.cpp $(OBJS) $(INCLUDES)
-	$(CXX) -o $@ $< $(CXXFLAGS) $(LDFLAGS)
+	$(CXX) -o $@ $< $(OBJS) $(CXXFLAGS) $(LDFLAGS)
 
 %.o: %.cpp $(INCLUDES)
 	$(CXX) -o $@ -c $< $(CXXFLAGS)

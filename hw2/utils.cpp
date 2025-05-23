@@ -6,13 +6,14 @@
 #include <cctype>
 #include <cerrno>
 #include <cstring>
+#include <iostream>
 
-#include "sdb.h"
+#include "sdb.hpp"
 
 namespace sdb
 {
 
-std::string lstrip(const std::string& string)
+std::string lstrip(const std::string &string)
 {
     for (auto start_iter = string.begin(); start_iter != string.end();
          start_iter++)
@@ -25,7 +26,7 @@ std::string lstrip(const std::string& string)
     return std::string();
 }
 
-std::string rstrip(const std::string& string)
+std::string rstrip(const std::string &string)
 {
     if (string.empty())
     {
@@ -52,7 +53,7 @@ std::string rstrip(const std::string& string)
     }
 }
 
-std::string strip(const std::string& string) { return rstrip(lstrip(string)); }
+std::string strip(const std::string &string) { return rstrip(lstrip(string)); }
 
 void kill_and_wait(pid_t pid, int sig)
 {
@@ -61,11 +62,20 @@ void kill_and_wait(pid_t pid, int sig)
         std::cerr << "kill failed - " << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
-    if (waitpid(pid, nullptr, 0) < 0)
+    if (!wait_pid(pid, nullptr, 0))
     {
-        std::cerr << "** waitpid failed - " << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
+}
+
+bool wait_pid(pid_t pid, int *status, int options)
+{
+    if (waitpid(pid, status, options) < 0)
+    {
+        std::cerr << "** waitpid failed - " << strerror(errno) << std::endl;
+        return false;
+    }
+    return true;
 }
 
 }  // namespace sdb
