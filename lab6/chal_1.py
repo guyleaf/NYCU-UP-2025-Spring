@@ -14,7 +14,7 @@ def solve(r: remote, data: bytes):
 
 
 if __name__ == "__main__":
-    with open("./chal_1.asm") as f:
+    with open("./shellcode.asm") as f:
         content = f.read()
 
     data = asm(content, arch="amd64", os="linux")
