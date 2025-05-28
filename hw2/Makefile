@@ -2,15 +2,16 @@ SHELL 			= /bin/sh
 
 #### Start of system configuration section. ####
 
-CXX				= g++
-CXXFLAGS		= -std=c++17 -Wall -Wextra -fPIE
-LDFLAGS			= -lcapstone
-
-prefix 			= .
+prefix 			= $(shell pwd)
 srcdir			= $(prefix)
 includesdir		= $(prefix)
 examplesdir 	= $(prefix)/examples/hw2_testing_program
 # toolsdir		= $(prefix)/tools
+
+CXX				= g++
+CXXFLAGS		= -std=c++17 -Wall -Wextra -fPIE
+LDFLAGS			= -lcapstone
+LDPATHS			= $(examplesdir)
 
 #### End of system configuration section. ####
 
@@ -42,6 +43,11 @@ examples:
 .PHONY: download
 download: | examples
 	cd examples && wget -O hw2_testing_program.zip https://up.zoolab.org/unixprog/hw02/hw2_testing_program.zip && unzip hw2_testing_program.zip
+
+link_sdb:
+	ln -sf $(prefix)/sdb $(examplesdir)
+examples_%: | all link_sdb
+	cd $(examplesdir) && ./sdb ./$*
 
 # .PHONY: asm
 # asm: $(addprefix asm_, $(PROGS))
