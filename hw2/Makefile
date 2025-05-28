@@ -16,7 +16,7 @@ LDPATHS			= $(examplesdir)
 #### End of system configuration section. ####
 
 PROGS			= sdb
-SRCS			= breakpoint.cpp ptools.cpp utils.cpp
+SRCS			= program.cpp commands.cpp breakpoint.cpp ptools.cpp utils.cpp
 INCLUDES		= $(SRCS:.cpp=.h) sdb.hpp auxv.h
 OBJS			= $(SRCS:.cpp=.o)
 

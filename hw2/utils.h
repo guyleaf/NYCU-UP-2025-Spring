@@ -8,6 +8,8 @@
 #include <string>
 #include <utility>
 
+#include "ptools.h"
+
 namespace sdb
 {
 
@@ -21,6 +23,8 @@ bool wait_pid_stopped(pid_t pid, int* status, int options);
 
 std::tuple<uintptr_t, uintptr_t> align_address(uintptr_t address);
 uint8_t replace_address(pid_t pid, uintptr_t address, uint8_t data);
+
+void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t& maps);
 
 }  // namespace sdb
 
