@@ -34,6 +34,8 @@ size_t load_maps(pid_t pid, maps_t& loaded)
         exit(EXIT_FAILURE);
     }
 
+    loaded.clear();
+
     size_t idx;
     std::string line;
     while (std::getline(ifs, line))
@@ -88,6 +90,8 @@ size_t load_auxvs(pid_t pid, auxvs_t& loaded)
         exit(EXIT_FAILURE);
     }
 
+    loaded.clear();
+
     uintptr_t key, value;
     while (ifs.read((char*)&key, sizeof(key)))
     {
@@ -96,6 +100,18 @@ size_t load_auxvs(pid_t pid, auxvs_t& loaded)
     }
 
     return loaded.size();
+}
+
+bool is_executable(pid_t pid, maps_t& maps, uintptr_t address)
+{
+    map_range_t range{address, address};
+    auto iter = maps.find(range);
+    if (iter == maps.end())
+    {
+        load_maps(pid, maps);
+        iter = maps.find(range);
+    }
+    return (iter->second.perm & 0x01) != 0;
 }
 
 }  // namespace sdb

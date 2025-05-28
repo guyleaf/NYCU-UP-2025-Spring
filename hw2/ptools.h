@@ -29,8 +29,9 @@ using auxvs_t = std::unordered_map<uintptr_t, uintptr_t>;
 
 bool operator<(const map_range_t& r1, const map_range_t& r2);
 size_t load_maps(pid_t pid, maps_t& loaded);
-
 size_t load_auxvs(pid_t pid, auxvs_t& loaded);
+
+bool is_executable(pid_t pid, maps_t& maps, uintptr_t address);
 
 }  // namespace sdb
 
