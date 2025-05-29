@@ -39,7 +39,7 @@ asm_%: %
 ########
 
 examples:
-	mkdir -p /data/hw2/examples && ln -s /data/hw2/examples
+	mkdir -p /data/hw2/examples && ln -fs /data/hw2/examples
 .PHONY: download
 download: | examples
 	cd examples && wget -O hw2_testing_program.zip https://up.zoolab.org/unixprog/hw02/hw2_testing_program.zip && unzip hw2_testing_program.zip
