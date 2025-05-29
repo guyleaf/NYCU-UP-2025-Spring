@@ -16,7 +16,7 @@
 namespace sdb
 {
 
-bool operator<(const map_range_t& r1, const map_range_t& r2)
+bool operator<(const range_t& r1, const range_t& r2)
 {
     return r1.begin < r2.begin && r1.end < r2.end;
 }
@@ -104,14 +104,14 @@ size_t load_auxvs(pid_t pid, auxvs_t& loaded)
 
 bool is_executable(pid_t pid, maps_t& maps, uintptr_t address)
 {
-    map_range_t range{address, address};
+    range_t range{address, address};
     auto iter = maps.find(range);
     if (iter == maps.end())
     {
         load_maps(pid, maps);
         iter = maps.find(range);
     }
-    return (iter->second.perm & 0x01) != 0;
+    return iter != maps.end() && (iter->second.perm & 0x01) != 0;
 }
 
 }  // namespace sdb
