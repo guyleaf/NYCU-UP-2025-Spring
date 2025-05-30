@@ -21,6 +21,30 @@ bool breakpoints_t::exist_by_address(uintptr_t address) const
     return addr_to_bp_id.find(address) != addr_to_bp_id.end();
 }
 
+bool breakpoints_t::hit(pid_t pid, struct user_regs_struct &regs) const
+{
+    if (ptrace(PTRACE_GETREGS, pid, 0, &regs) < 0)
+    {
+        std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    auto rip = regs.rip - 1;
+    if (enabled(rip))
+    {
+        std::cout << "** hit a breakpoint at [0x" << std::hex << rip << "]."
+                  << std::endl;
+        return true;
+    }
+    return false;
+}
+
+bool breakpoints_t::enabled(uintptr_t address) const
+{
+    return exist_by_address(address) &&
+           breakpoints.at(addr_to_bp_id.at(address)).enabled;
+}
+
 ssize_t breakpoints_t::add(pid_t pid, uintptr_t address, maps_t &maps)
 {
     // TODO: check the address is the first-byte of the instruction
@@ -66,14 +90,57 @@ void breakpoints_t::remove_by_id(pid_t pid, size_t id)
 
     addr_to_bp_id.erase(address);
     breakpoints.erase(id);
+    std::cout << "** delete breakpoint [" << id << "]." << std::endl;
+}
+
+void breakpoints_t::patch(pid_t pid, uintptr_t address, uint8_t content)
+{
+    if (!exist_by_address(address))
+    {
+        std::cerr << "** breakpoint [0x" << std::hex << address
+                  << "] does not exist." << std::endl;
+        return;
+    }
+    auto id = addr_to_bp_id.at(address);
+    auto &breakpoint = breakpoints.at(id);
+
+    breakpoint.original_byte_code = content;
+    if (breakpoint.enabled)
+    {
+        replace_address(pid, address, 0xcc);
+    }
+    else
+    {
+        replace_address(pid, address, breakpoint.original_byte_code);
+    }
+}
+
+void breakpoints_t::enable_all(pid_t pid)
+{
+    for (auto &pair : breakpoints)
+    {
+        if (!pair.second.enabled)
+        {
+            enable(pid, pair.second.address);
+        }
+    }
+}
+
+void breakpoints_t::disable_all(pid_t pid)
+{
+    for (auto &pair : breakpoints)
+    {
+        if (pair.second.enabled)
+        {
+            disable(pid, pair.second.address);
+        }
+    }
 }
 
 void breakpoints_t::enable(pid_t pid, uintptr_t address)
 {
     if (!exist_by_address(address))
     {
-        std::cerr << "** breakpoint [0x" << std::hex << address
-                  << "] does not exist." << std::endl;
         return;
     }
     auto id = addr_to_bp_id.at(address);
@@ -88,8 +155,6 @@ void breakpoints_t::disable(pid_t pid, uintptr_t address)
 {
     if (!exist_by_address(address))
     {
-        std::cerr << "** breakpoint [0x" << std::hex << address
-                  << "] does not exist." << std::endl;
         return;
     }
     auto id = addr_to_bp_id.at(address);

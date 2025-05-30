@@ -1,6 +1,7 @@
 #ifndef __BREAKPOINT_H__
 #define __BREAKPOINT_H__
 
+#include <sys/user.h>
 #include <sys/wait.h>
 
 #include <cstddef>
@@ -26,15 +27,19 @@ struct breakpoints_t
    public:
     bool exist_by_id(size_t id) const;
     bool exist_by_address(uintptr_t address) const;
-    bool hit(pid_t pid) const;
+    bool hit(pid_t pid, struct user_regs_struct& regs) const;
+    bool enabled(uintptr_t address) const;
 
     ssize_t add(pid_t pid, uintptr_t address, maps_t& maps);
-    ssize_t add_by_offset(pid_t pid, uintptr_t offset);
 
     void remove_by_address(pid_t pid, uintptr_t address);
     void remove_by_id(pid_t pid, size_t id);
 
+    void patch(pid_t pid, uintptr_t address, uint8_t content);
+
+    void enable_all(pid_t pid);
     void enable(pid_t pid, uintptr_t address);
+    void disable_all(pid_t pid);
     void disable(pid_t pid, uintptr_t address);
 
     friend std::ostream& operator<<(std::ostream& out,

@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "program.h"
 
@@ -46,17 +47,20 @@ class info_regs_t : public command_t
    public:
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) override;
+
+   private:
+    void print_register(std::string name, uintptr_t content) const;
 };
 
 class add_breakpoint_t : public command_t
 {
    public:
-    add_breakpoint_t(uintptr_t address);
+    add_breakpoint_t(uintptr_t address_or_offset);
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) override;
 
    private:
-    uintptr_t address;
+    uintptr_t address_or_offset;
 };
 
 class info_breakpoints_t : public command_t
@@ -85,6 +89,8 @@ class patch_mem_t : public command_t
         std::shared_ptr<program_t> program) override;
 
    private:
+    std::vector<uint8_t> to_bytes(std::string data) const;
+
     uintptr_t address;
     std::string content;
 };
