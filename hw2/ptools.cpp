@@ -47,7 +47,6 @@ size_t load_maps(pid_t pid, maps_t& loaded)
         {
             columns.push_back(line);
         }
-        if (columns.size() < 6) continue;
 
         map_entry_t entry;
 
@@ -68,8 +67,11 @@ size_t load_maps(pid_t pid, maps_t& loaded)
         line = columns.at(2);
         entry.offset = std::stoul(line, nullptr, 16);
 
-        // name
-        entry.name = basename(columns.at(5).data());
+        if (columns.size() > 5)
+        {
+            // name
+            entry.name = basename(columns.at(5).data());
+        }
 
         loaded[entry.range] = std::move(entry);
     }
@@ -105,7 +107,8 @@ size_t load_auxvs(pid_t pid, auxvs_t& loaded)
 
 maps_t::iterator find_map(pid_t pid, maps_t& maps, uintptr_t address)
 {
-    range_t range{address, address};
+    // [address, address + 1)
+    range_t range{address, address + 1};
     auto iter = maps.find(range);
     if (iter == maps.end())
     {

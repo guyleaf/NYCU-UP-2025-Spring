@@ -81,13 +81,13 @@ std::unique_ptr<sdb::command_t> parse_cmd(const std::string &line)
         cmd_ptr = std::make_unique<sdb::syscall_t>();
     }
 
-    if (cmd_ptr && !cmd_ptr->validate())
-    {
-        cmd_ptr = nullptr;
-    }
-    else
+    if (!cmd_ptr)
     {
         std::cerr << "** unknown/invalid command." << std::endl;
+    }
+    else if (!cmd_ptr->validate())
+    {
+        cmd_ptr = nullptr;
     }
     return cmd_ptr;
 }
@@ -101,7 +101,6 @@ int main(int argc, const char *argv[])
     {
         auto command = sdb::load_program_t(argv[1]);
         program_ptr = command.execute(nullptr);
-        return 0;
     }
 
     while (true)

@@ -90,7 +90,7 @@ bool wait_pid_trapped(pid_t pid, int *status, int options)
     }
     if (!WIFSTOPPED(*status))
     {
-        std::cerr << "** the program is terminated." << std::endl;
+        std::cerr << "** the target program terminated." << std::endl;
         return false;
     }
     auto signal = WSTOPSIG(*status) & SIGTRAP;
@@ -164,20 +164,16 @@ void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
     {
         errno = 0;
         auto word = ptrace(PTRACE_PEEKTEXT, pid, addr, 0);
-        if (errno != 0)
-        {
-            std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
-            exit(EXIT_FAILURE);
-        }
+        if (errno != 0) break;
 
         // make sure don't exceed the executable region.
-        auto size = PEEK_SIZE;
-        while (size > 0 && !is_executable(pid, maps, addr + size - 1))
-        {
-            size--;
-        }
-        memcpy(buf + addr - aligned_addr, &word, size);
-        if (size != PEEK_SIZE) break;
+        // auto size = PEEK_SIZE;
+        // while (size > 0 && !is_executable(pid, maps, addr + size - 1))
+        // {
+        //     size--;
+        // }
+        memcpy(buf + addr - aligned_addr, &word, PEEK_SIZE);
+        // if (size != PEEK_SIZE) break;
     }
 
     // initialize capstone engine
@@ -208,6 +204,14 @@ void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
     for (size_t i = 0; i < actual_count; i++)
     {
         auto insn = insns[i];
+        if (!is_executable(pid, maps, insn.address))
+        {
+            std::cerr << "** the address is out of the range of the executable "
+                         "region."
+                      << std::endl;
+            break;
+        }
+
         std::cout << "\t" << std::hex << insn.address << ": ";
         for (size_t j = 0; j < insn.size; j++)
         {
@@ -219,12 +223,6 @@ void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
             std::cout << std::setfill(' ') << std::setw(3) << "";
         }
         std::cout << insn.mnemonic << "\t" << insn.op_str << std::endl;
-    }
-    if (actual_count != count)
-    {
-        std::cerr
-            << "** the address is out of the range of the executable region."
-            << std::endl;
     }
 
     cs_free(insns, actual_count);

@@ -163,8 +163,8 @@ std::ostream &operator<<(std::ostream &out, const breakpoints_t &breakpoints)
     out << "Num\tAddress" << std::endl;
     for (const auto &pair : breakpoints.breakpoints)
     {
-        out << std::dec << pair.first << "\t" << std::hex << pair.second.address
-            << std::endl;
+        out << std::dec << pair.first << "\t0x" << std::hex
+            << pair.second.address << std::endl;
     }
     return out;
 }

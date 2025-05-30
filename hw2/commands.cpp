@@ -278,7 +278,7 @@ std::shared_ptr<program_t> info_regs_t::execute(
 
 void info_regs_t::print_register(std::string name, uintptr_t content) const
 {
-    std::cout << name << " 0x" << std::hex << std::setfill('0')
+    std::cout << name << "\t0x" << std::hex << std::setfill('0')
               << std::setw(WORD_SIZE * 2) << content << "\t";
 }
 
@@ -294,7 +294,7 @@ bool add_breakpoint_t::validate() const
         std::cerr << "** the target address is not valid." << std::endl;
         return false;
     }
-    if (is_hex_string(address_or_offset))
+    if (!is_hex_string(address_or_offset))
     {
         std::cerr << "** the target address is not valid." << std::endl;
         return false;
@@ -352,7 +352,7 @@ std::shared_ptr<program_t> info_breakpoints_t::execute(
         return program;
     }
 
-    std::cout << program->breakpoints << std::endl;
+    std::cout << program->breakpoints;
 
     return program;
 }
@@ -453,7 +453,7 @@ std::shared_ptr<program_t> patch_mem_t::execute(
         }
     }
 
-    std::cout << "** patch memory at [0x" << std::hex << __address << "]."
+    std::cout << "** patch memory at 0x" << std::hex << __address << "."
               << std::endl;
 
     return program;
