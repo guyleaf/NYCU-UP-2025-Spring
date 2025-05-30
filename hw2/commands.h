@@ -15,6 +15,7 @@ class command_t
    public:
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) = 0;
+    inline virtual bool validate() const;
 };
 
 class load_program_t : public command_t
@@ -23,6 +24,7 @@ class load_program_t : public command_t
     load_program_t(std::string path);
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) override;
+    virtual bool validate() const override;
 
    private:
     std::string path;
@@ -55,12 +57,13 @@ class info_regs_t : public command_t
 class add_breakpoint_t : public command_t
 {
    public:
-    add_breakpoint_t(uintptr_t address_or_offset);
+    add_breakpoint_t(std::string address_or_offset);
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) override;
+    virtual bool validate() const override;
 
    private:
-    uintptr_t address_or_offset;
+    std::string address_or_offset;
 };
 
 class info_breakpoints_t : public command_t
@@ -73,25 +76,27 @@ class info_breakpoints_t : public command_t
 class remove_breakpoint_t : public command_t
 {
    public:
-    remove_breakpoint_t(size_t id);
+    remove_breakpoint_t(std::string id);
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) override;
+    virtual bool validate() const override;
 
    private:
-    size_t id;
+    std::string id;
 };
 
 class patch_mem_t : public command_t
 {
    public:
-    patch_mem_t(uintptr_t address, std::string content);
+    patch_mem_t(std::string address, std::string content);
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) override;
+    virtual bool validate() const override;
 
    private:
     std::vector<uint8_t> to_bytes(std::string data) const;
 
-    uintptr_t address;
+    std::string address;
     std::string content;
 };
 

@@ -31,7 +31,9 @@ bool operator<(const range_t& r1, const range_t& r2);
 size_t load_maps(pid_t pid, maps_t& loaded);
 size_t load_auxvs(pid_t pid, auxvs_t& loaded);
 
+maps_t::iterator find_map(pid_t pid, maps_t& maps, uintptr_t address);
 bool is_executable(pid_t pid, maps_t& maps, uintptr_t address);
+bool is_valid(pid_t pid, maps_t& maps, uintptr_t address);
 
 }  // namespace sdb
 

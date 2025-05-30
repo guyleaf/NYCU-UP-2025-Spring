@@ -102,7 +102,7 @@ size_t load_auxvs(pid_t pid, auxvs_t& loaded)
     return loaded.size();
 }
 
-bool is_executable(pid_t pid, maps_t& maps, uintptr_t address)
+maps_t::iterator find_map(pid_t pid, maps_t& maps, uintptr_t address)
 {
     range_t range{address, address};
     auto iter = maps.find(range);
@@ -111,7 +111,19 @@ bool is_executable(pid_t pid, maps_t& maps, uintptr_t address)
         load_maps(pid, maps);
         iter = maps.find(range);
     }
+    return iter;
+}
+
+bool is_executable(pid_t pid, maps_t& maps, uintptr_t address)
+{
+    auto iter = find_map(pid, maps, address);
     return iter != maps.end() && (iter->second.perm & 0x01) != 0;
+}
+
+bool is_valid(pid_t pid, maps_t& maps, uintptr_t address)
+{
+    auto iter = find_map(pid, maps, address);
+    return iter != maps.end();
 }
 
 }  // namespace sdb

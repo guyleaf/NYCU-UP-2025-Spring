@@ -4,6 +4,7 @@
 #include <sys/user.h>
 #include <sys/wait.h>
 
+#include <cctype>
 #include <cstring>
 #include <iomanip>
 
@@ -13,7 +14,19 @@
 namespace sdb
 {
 
+inline bool command_t::validate() const { return true; }
+
 load_program_t::load_program_t(std::string path) : path(path) {}
+
+bool load_program_t::validate() const
+{
+    if (path.size() == 0)
+    {
+        std::cerr << "** the program path is not valid." << std::endl;
+        return false;
+    }
+    return true;
+}
 
 std::shared_ptr<program_t> load_program_t::execute(
     std::shared_ptr<program_t> __attribute__((unused)) program)
@@ -257,9 +270,24 @@ void info_regs_t::print_register(std::string name, uintptr_t content) const
               << std::setw(WORD_SIZE * 2) << content << "\t";
 }
 
-add_breakpoint_t::add_breakpoint_t(uintptr_t address_or_offset)
+add_breakpoint_t::add_breakpoint_t(std::string address_or_offset)
     : address_or_offset(address_or_offset)
 {
+}
+
+bool add_breakpoint_t::validate() const
+{
+    if (address_or_offset.size() == 0)
+    {
+        std::cerr << "** the target address is not valid." << std::endl;
+        return false;
+    }
+    if (is_hex_string(address_or_offset))
+    {
+        std::cerr << "** the target address is not valid." << std::endl;
+        return false;
+    }
+    return true;
 }
 
 std::shared_ptr<program_t> add_breakpoint_t::execute(
@@ -272,15 +300,16 @@ std::shared_ptr<program_t> add_breakpoint_t::execute(
     }
 
     auto pid = program->pid;
+    uintptr_t __address_or_offset = std::stoul(address_or_offset, nullptr, 16);
 
     // calculate address
-    if (!is_executable(pid, program->maps, address_or_offset))
+    if (!is_executable(pid, program->maps, __address_or_offset))
     {
         auto base_addr = program->base_address();
-        address_or_offset += base_addr;
+        __address_or_offset += base_addr;
     }
 
-    auto id = program->breakpoints.add(pid, address_or_offset, program->maps);
+    auto id = program->breakpoints.add(pid, __address_or_offset, program->maps);
     if (id < 0)
     {
         return program;
@@ -294,9 +323,9 @@ std::shared_ptr<program_t> add_breakpoint_t::execute(
     }
 
     // if the new breakpoint is set at the current rip, skip it.
-    if (regs.rip == address_or_offset)
+    if (regs.rip == __address_or_offset)
     {
-        program->breakpoints.disable(pid, address_or_offset);
+        program->breakpoints.disable(pid, __address_or_offset);
     }
 
     return program;
@@ -316,7 +345,25 @@ std::shared_ptr<program_t> info_breakpoints_t::execute(
     return program;
 }
 
-remove_breakpoint_t::remove_breakpoint_t(size_t id) : id(id) {}
+remove_breakpoint_t::remove_breakpoint_t(std::string id) : id(id) {}
+
+bool remove_breakpoint_t::validate() const
+{
+    if (id.size() == 0)
+    {
+        std::cerr << "** the breakpoint id is not valid." << std::endl;
+        return false;
+    }
+    for (unsigned char digit : id)
+    {
+        if (!std::isdigit(digit))
+        {
+            std::cerr << "** the breakpoint id is not valid." << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
 
 std::shared_ptr<program_t> remove_breakpoint_t::execute(
     std::shared_ptr<program_t> program)
@@ -327,14 +374,31 @@ std::shared_ptr<program_t> remove_breakpoint_t::execute(
         return program;
     }
 
-    program->breakpoints.remove_by_id(program->pid, id);
+    size_t __id = std::stoul(id);
+    program->breakpoints.remove_by_id(program->pid, __id);
 
     return program;
 }
 
-patch_mem_t::patch_mem_t(uintptr_t address, std::string content)
+patch_mem_t::patch_mem_t(std::string address, std::string content)
     : address(address), content(content)
 {
+}
+
+bool patch_mem_t::validate() const
+{
+    if (address.size() == 0 || !is_hex_string(address))
+    {
+        std::cerr << "** the target address is not valid." << std::endl;
+        return false;
+    }
+    if (content.size() < 1 || content.size() > 2048 ||
+        content.size() % 2 != 0 || !is_hex_string(content))
+    {
+        std::cerr << "** the patch content is not valid." << std::endl;
+        return false;
+    }
+    return true;
 }
 
 std::shared_ptr<program_t> patch_mem_t::execute(
@@ -347,20 +411,16 @@ std::shared_ptr<program_t> patch_mem_t::execute(
     }
 
     auto pid = program->pid;
+    uintptr_t __address = std::stoul(address, nullptr, 16);
 
-    if (!is_executable(pid, program->maps, address))
+    if (!is_valid(pid, program->maps, __address))
     {
         std::cerr << "** the target address is not valid." << std::endl;
         return program;
     }
-    if (content.size() % 2 != 0)
-    {
-        std::cerr << "** the patch content is not valid." << std::endl;
-        return program;
-    }
 
     auto bytes = to_bytes(content);
-    if (!is_executable(pid, program->maps, address + bytes.size() - 1))
+    if (!is_valid(pid, program->maps, __address + bytes.size() - 1))
     {
         std::cerr << "** the target address is not valid." << std::endl;
         return program;
@@ -368,7 +428,7 @@ std::shared_ptr<program_t> patch_mem_t::execute(
 
     for (size_t i = 0; i < bytes.size(); i++)
     {
-        auto target_addr = address + i;
+        auto target_addr = __address + i;
         auto byte = bytes[i];
 
         if (program->breakpoints.exist_by_address(target_addr))
@@ -381,12 +441,26 @@ std::shared_ptr<program_t> patch_mem_t::execute(
         }
     }
 
-    std::cout << "** patch memory at [0x" << std::hex << address << "]."
+    std::cout << "** patch memory at [0x" << std::hex << __address << "]."
               << std::endl;
 
     return program;
 }
 
-std::vector<uint8_t> patch_mem_t::to_bytes(std::string data) const {}
+std::vector<uint8_t> patch_mem_t::to_bytes(std::string data) const
+{
+    if (data.at(0) == '0' && data.at(1) == 'x')
+    {
+        data = data.substr(2);
+    }
+    std::vector<uint8_t> bytes;
+    for (size_t i = 0; i < data.size(); i += 2)
+    {
+        auto byte =
+            static_cast<uint8_t>(std::stoul(data.substr(i, 2), nullptr, 16));
+        bytes.push_back(byte);
+    }
+    return bytes;
+}
 
 }  // namespace sdb

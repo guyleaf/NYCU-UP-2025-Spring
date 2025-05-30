@@ -209,4 +209,26 @@ void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
     cs_close(&handle);
 }
 
+bool is_hex_string(std::string content)
+{
+    if (content.size() == 0)
+    {
+        return false;
+    }
+
+    std::string __content = content;
+    if (__content.size() > 2 && __content[0] == '0' && __content[1] == 'x')
+    {
+        __content = __content.substr(2);
+    }
+    for (unsigned char letter : __content)
+    {
+        if (!std::isxdigit(letter))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace sdb
