@@ -14,7 +14,7 @@
 namespace sdb
 {
 
-inline bool command_t::validate() const { return true; }
+bool command_t::validate() const { return true; }
 
 load_program_t::load_program_t(std::string path) : path(path) {}
 
@@ -56,11 +56,12 @@ std::shared_ptr<program_t> load_program_t::execute(
     // parent process
     else
     {
-        if (!wait_pid_stopped(pid, &status, 0))
+        if (!wait_pid_trapped(pid, &status, 0))
         {
             return nullptr;
         }
-        if (ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_EXITKILL) < 0)
+        if (ptrace(PTRACE_SETOPTIONS, pid, 0,
+                   PTRACE_O_TRACESYSGOOD | PTRACE_O_EXITKILL) < 0)
         {
             std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
             kill_and_wait(pid, SIGKILL);
@@ -85,7 +86,7 @@ std::shared_ptr<program_t> load_program_t::execute(
         std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
-    if (!wait_pid_stopped(pid, &status, 0))
+    if (!wait_pid_trapped(pid, &status, 0))
     {
         exit(EXIT_FAILURE);
     }
@@ -133,38 +134,25 @@ std::shared_ptr<program_t> single_step_t::execute(
         std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
-    if (!wait_pid_stopped(pid, &status, 0))
+    if (!wait_pid_trapped(pid, &status, 0))
     {
         return nullptr;
     }
 
-    uintptr_t rip;
-    struct user_regs_struct regs;
-    auto hit = program->breakpoints.hit(pid, regs);
-    if (hit)
-    {
-        rip = regs.rip - 1;
-        regs.rip = rip;
-        if (ptrace(PTRACE_SETREGS, pid, 0, &regs) < 0)
-        {
-            std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
-    else
-    {
-        rip = regs.rip;
-    }
+    auto regs = get_registers(pid);
+    // single step won't be trapped by the breakpoint.
+    // because we always check the next instruction.
+    auto hit = program->breakpoints.hit(regs.rip);
 
     // avoid printing 0xcc instruction
     program->breakpoints.disable_all(pid);
-    print_instructions(pid, rip, 5, program->maps);
+    print_instructions(pid, regs.rip, 5, program->maps);
     program->breakpoints.enable_all(pid);
 
-    // must disable the hit breakpoint after printing
     if (hit)
     {
-        program->breakpoints.disable(pid, rip);
+        // must disable the hit breakpoint for further execution
+        program->breakpoints.disable(pid, regs.rip);
     }
 
     return program;
@@ -182,28 +170,52 @@ std::shared_ptr<program_t> continue_t::execute(
     auto pid = program->pid;
     int status;
 
+    // if the breakpoint in current rip is disabled and there is a loop among
+    // them, we need to do a single step first to re-enable it to keep stateless
+    // among commands.
+    auto regs = get_registers(pid);
+    if (program->breakpoints.exist_by_address(regs.rip) &&
+        program->breakpoints.disabled(regs.rip))
+    {
+        if (ptrace(PTRACE_SINGLESTEP, pid, 0, 0) < 0)
+        {
+            std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        if (!wait_pid_trapped(pid, &status, 0))
+        {
+            return nullptr;
+        }
+
+        // re-enable it
+        program->breakpoints.enable(pid, regs.rip);
+    }
+
+    // normal continue execution
     if (ptrace(PTRACE_CONT, pid, 0, 0) < 0)
     {
         std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
         exit(EXIT_FAILURE);
     }
-    if (!wait_pid_stopped(pid, &status, 0))
+    if (!wait_pid_trapped(pid, &status, 0))
     {
         return nullptr;
     }
 
-    struct user_regs_struct regs;
-    if (!program->breakpoints.hit(pid, regs))
-    {
-        std::cerr << "** continue failed - stop at the unknown state"
-                  << std::endl;
-        exit(EXIT_FAILURE);
-    }
+    regs = get_registers(pid);
 
-    regs.rip -= 1;
+    // restore the rip to the breakpoint
+    regs.rip--;
     if (ptrace(PTRACE_SETREGS, pid, 0, &regs) < 0)
     {
         std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    if (!program->breakpoints.hit(regs.rip))
+    {
+        std::cerr << "** continue failed - stop at the unknown state"
+                  << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -212,7 +224,7 @@ std::shared_ptr<program_t> continue_t::execute(
     print_instructions(pid, regs.rip, 5, program->maps);
     program->breakpoints.enable_all(pid);
 
-    // must disable the hit breakpoint after printing
+    // must disable the hit breakpoint for further execution
     program->breakpoints.disable(pid, regs.rip);
 
     return program;
@@ -461,6 +473,104 @@ std::vector<uint8_t> patch_mem_t::to_bytes(std::string data) const
         bytes.push_back(byte);
     }
     return bytes;
+}
+
+std::shared_ptr<program_t> syscall_t::execute(
+    std::shared_ptr<program_t> program)
+{
+    if (!program)
+    {
+        std::cerr << "** please load a program first." << std::endl;
+        return program;
+    }
+
+    auto pid = program->pid;
+    int status;
+
+    // syscall will act like the continue command, but also be trapped by the
+    // syscall. If the breakpoint in current rip is disabled and there is a loop
+    // among them, we need to do a single step first to re-enable it to keep
+    // stateless among commands.
+    auto regs = get_registers(pid);
+    if (program->breakpoints.exist_by_address(regs.rip) &&
+        program->breakpoints.disabled(regs.rip))
+    {
+        if (ptrace(PTRACE_SINGLESTEP, pid, 0, 0) < 0)
+        {
+            std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        if (!wait_pid_trapped(pid, &status, 0))
+        {
+            return nullptr;
+        }
+
+        // re-enable it
+        program->breakpoints.enable(pid, regs.rip);
+    }
+
+    // normal syscall execution
+    if (ptrace(PTRACE_SYSCALL, pid, 0, 0) < 0)
+    {
+        std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    if (!wait_pid_trapped(pid, &status, 0))
+    {
+        return nullptr;
+    }
+
+    regs = get_registers(pid);
+
+    auto trapped_by_syscall = (WSTOPSIG(status) & 0x80) == 0x80;
+    if (trapped_by_syscall)
+    {
+        static bool entered = false;
+        if (entered)
+        {
+            std::cout << "** leave a syscall(" << std::dec << regs.orig_rax
+                      << ") = " << regs.rax << " at 0x" << std::hex
+                      << regs.rip - 2 << "." << std::endl;
+        }
+        else
+        {
+            std::cout << "** enter a syscall(" << std::dec << regs.orig_rax
+                      << ") at 0x" << std::hex << regs.rip - 2 << "."
+                      << std::endl;
+        }
+        entered = !entered;
+    }
+    // trapped by a breakpoint
+    else
+    {
+        // restore the rip to the breakpoint
+        regs.rip--;
+        if (ptrace(PTRACE_SETREGS, pid, 0, &regs) < 0)
+        {
+            std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        if (!program->breakpoints.hit(regs.rip))
+        {
+            std::cerr << "** continue failed - stop at the unknown state"
+                      << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // avoid printing 0xcc instruction
+    program->breakpoints.disable_all(pid);
+    print_instructions(pid, regs.rip, 5, program->maps);
+    program->breakpoints.enable_all(pid);
+
+    if (!trapped_by_syscall)
+    {
+        // must disable the hit breakpoint for further execution
+        program->breakpoints.disable(pid, regs.rip);
+    }
+
+    return program;
 }
 
 }  // namespace sdb

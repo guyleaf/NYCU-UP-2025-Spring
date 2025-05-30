@@ -27,8 +27,9 @@ struct breakpoints_t
    public:
     bool exist_by_id(size_t id) const;
     bool exist_by_address(uintptr_t address) const;
-    bool hit(pid_t pid, struct user_regs_struct& regs) const;
+    bool hit(uintptr_t address) const;
     bool enabled(uintptr_t address) const;
+    bool disabled(uintptr_t address) const;
 
     ssize_t add(pid_t pid, uintptr_t address, maps_t& maps);
 

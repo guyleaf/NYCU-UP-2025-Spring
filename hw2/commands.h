@@ -15,7 +15,7 @@ class command_t
    public:
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) = 0;
-    inline virtual bool validate() const;
+    virtual bool validate() const;
 };
 
 class load_program_t : public command_t

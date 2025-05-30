@@ -101,6 +101,7 @@ int main(int argc, const char *argv[])
     {
         auto command = sdb::load_program_t(argv[1]);
         program_ptr = command.execute(nullptr);
+        return 0;
     }
 
     while (true)

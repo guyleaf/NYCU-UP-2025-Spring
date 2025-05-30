@@ -82,7 +82,7 @@ bool wait_pid(pid_t pid, int *status, int options)
     return true;
 }
 
-bool wait_pid_stopped(pid_t pid, int *status, int options)
+bool wait_pid_trapped(pid_t pid, int *status, int options)
 {
     if (!wait_pid(pid, status, options))
     {
@@ -92,6 +92,13 @@ bool wait_pid_stopped(pid_t pid, int *status, int options)
     {
         std::cerr << "** the program is terminated." << std::endl;
         return false;
+    }
+    auto signal = WSTOPSIG(*status) & SIGTRAP;
+    if (signal != SIGTRAP)
+    {
+        std::cerr << "** the program is stopped by the unhandled signal, "
+                  << strsignal(signal) << "." << std::endl;
+        exit(EXIT_FAILURE);
     }
     return true;
 }
@@ -133,6 +140,17 @@ uint8_t replace_address(pid_t pid, uintptr_t address, uint8_t data)
     return original_data;
 }
 
+struct user_regs_struct get_registers(pid_t pid)
+{
+    struct user_regs_struct regs;
+    if (ptrace(PTRACE_GETREGS, pid, 0, &regs) < 0)
+    {
+        std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    return regs;
+}
+
 void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
 {
     csh handle;
@@ -146,7 +164,11 @@ void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
     {
         errno = 0;
         auto word = ptrace(PTRACE_PEEKTEXT, pid, addr, 0);
-        if (errno != 0) break;
+        if (errno != 0)
+        {
+            std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
+            exit(EXIT_FAILURE);
+        }
 
         // make sure don't exceed the executable region.
         auto size = PEEK_SIZE;
