@@ -76,6 +76,10 @@ std::unique_ptr<sdb::command_t> parse_cmd(const std::string &line)
     {
         cmd_ptr = std::make_unique<sdb::patch_mem_t>(args[0], args[1]);
     }
+    else if (cmd == "syscall")
+    {
+        cmd_ptr = std::make_unique<sdb::syscall_t>();
+    }
 
     if (cmd_ptr && !cmd_ptr->validate())
     {
