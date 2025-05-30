@@ -42,6 +42,7 @@ size_t load_maps(pid_t pid, maps_t& loaded)
     {
         std::vector<std::string> columns;
         ss.str(line);
+        ss.clear();
         while (ss >> line)
         {
             columns.push_back(line);
