@@ -129,6 +129,8 @@ std::shared_ptr<program_t> single_step_t::execute(
     auto pid = program->pid;
     int status;
 
+    auto regs = get_registers(pid);
+
     if (ptrace(PTRACE_SINGLESTEP, pid, 0, 0) < 0)
     {
         std::cerr << "** ptrace failed - " << strerror(errno) << std::endl;
@@ -139,7 +141,14 @@ std::shared_ptr<program_t> single_step_t::execute(
         return nullptr;
     }
 
-    auto regs = get_registers(pid);
+    // always re-enable the breakpoint to keep stateless
+    if (program->breakpoints.exist_by_address(regs.rip) &&
+        program->breakpoints.disabled(regs.rip))
+    {
+        program->breakpoints.enable(pid, regs.rip);
+    }
+
+    regs = get_registers(pid);
     // single step won't be trapped by the breakpoint.
     // because we always check the next instruction.
     auto hit = program->breakpoints.hit(regs.rip);
