@@ -214,7 +214,8 @@ void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
         {
             std::cout << std::setfill(' ') << std::setw(3) << "";
         }
-        std::cout << insn.mnemonic << "\t\t" << insn.op_str << std::endl;
+        std::cout << std::left << std::setfill(' ') << std::setw(13)
+                  << insn.mnemonic << insn.op_str << std::endl;
     }
 
     cs_free(insns, actual_count);
