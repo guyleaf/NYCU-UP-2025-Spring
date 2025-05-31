@@ -6,7 +6,7 @@ prefix 			= $(shell pwd)
 srcdir			= $(prefix)
 includesdir		= $(prefix)
 examplesdir 	= $(prefix)/examples/hw2_testing_program
-# toolsdir		= $(prefix)/tools
+submissiondir	= ./311553007_hw2
 
 CXX				= g++
 CXXFLAGS		= -std=c++17 -Wall -Wextra -fPIE
@@ -59,3 +59,9 @@ debug: all
 .PHONY: clean
 clean:
 	rm -f $(PROGS) $(OBJS)
+
+submission_dir:
+	mkdir -p $(submissiondir)
+.PHONY: submission
+submission: | submission_dir
+	cp *.h *.hpp *.cpp Makefile $(submissiondir) && tar cf 311553007_hw2.tgz $(submissiondir) && rm -rf $(submissiondir)
