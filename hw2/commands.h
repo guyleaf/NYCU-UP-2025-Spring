@@ -57,13 +57,14 @@ class info_regs_t : public command_t
 class add_breakpoint_t : public command_t
 {
    public:
-    add_breakpoint_t(std::string address_or_offset);
+    add_breakpoint_t(std::string address_or_offset, bool is_offset);
     virtual std::shared_ptr<program_t> execute(
         std::shared_ptr<program_t> program) override;
     virtual bool validate() const override;
 
    private:
     std::string address_or_offset;
+    bool is_offset;
 };
 
 class info_breakpoints_t : public command_t

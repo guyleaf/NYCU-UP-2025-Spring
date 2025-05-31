@@ -282,8 +282,9 @@ void info_regs_t::print_register(std::string name, uintptr_t content) const
               << std::setw(WORD_SIZE * 2) << content << "\t";
 }
 
-add_breakpoint_t::add_breakpoint_t(std::string address_or_offset)
-    : address_or_offset(address_or_offset)
+add_breakpoint_t::add_breakpoint_t(std::string address_or_offset,
+                                   bool is_offset)
+    : address_or_offset(address_or_offset), is_offset(is_offset)
 {
 }
 
@@ -315,10 +316,9 @@ std::shared_ptr<program_t> add_breakpoint_t::execute(
     uintptr_t __address_or_offset = std::stoul(address_or_offset, nullptr, 16);
 
     // calculate address
-    if (!is_executable(pid, program->maps, __address_or_offset))
+    if (is_offset)
     {
-        auto base_addr = program->base_address();
-        __address_or_offset += base_addr;
+        __address_or_offset += program->base_address();
     }
 
     auto id = program->breakpoints.add(pid, __address_or_offset, program->maps);

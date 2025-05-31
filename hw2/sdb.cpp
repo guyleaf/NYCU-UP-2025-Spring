@@ -66,7 +66,8 @@ std::unique_ptr<sdb::command_t> parse_cmd(const std::string &line)
     }
     else if ((cmd == "break" || cmd == "breakrva") && args.size() >= 1)
     {
-        cmd_ptr = std::make_unique<sdb::add_breakpoint_t>(args[0]);
+        cmd_ptr =
+            std::make_unique<sdb::add_breakpoint_t>(args[0], cmd == "breakrva");
     }
     else if (cmd == "delete" && args.size() >= 1)
     {
