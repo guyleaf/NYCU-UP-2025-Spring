@@ -165,15 +165,7 @@ void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
         errno = 0;
         auto word = ptrace(PTRACE_PEEKTEXT, pid, addr, 0);
         if (errno != 0) break;
-
-        // make sure don't exceed the executable region.
-        // auto size = PEEK_SIZE;
-        // while (size > 0 && !is_executable(pid, maps, addr + size - 1))
-        // {
-        //     size--;
-        // }
         memcpy(buf + addr - aligned_addr, &word, PEEK_SIZE);
-        // if (size != PEEK_SIZE) break;
     }
 
     // initialize capstone engine
@@ -222,7 +214,7 @@ void print_instructions(pid_t pid, uintptr_t rip, size_t count, maps_t &maps)
         {
             std::cout << std::setfill(' ') << std::setw(3) << "";
         }
-        std::cout << insn.mnemonic << "\t" << insn.op_str << std::endl;
+        std::cout << insn.mnemonic << "\t\t" << insn.op_str << std::endl;
     }
 
     cs_free(insns, actual_count);

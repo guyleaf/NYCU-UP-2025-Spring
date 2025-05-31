@@ -525,20 +525,19 @@ std::shared_ptr<program_t> syscall_t::execute(
     auto trapped_by_syscall = (WSTOPSIG(status) & 0x80) == 0x80;
     if (trapped_by_syscall)
     {
-        static bool entered = false;
-        if (entered)
+        regs.rip -= 2;
+        if (program->entered_syscall)
         {
             std::cout << "** leave a syscall(" << std::dec << regs.orig_rax
-                      << ") = " << regs.rax << " at 0x" << std::hex
-                      << regs.rip - 2 << "." << std::endl;
+                      << ") = " << regs.rax << " at 0x" << std::hex << regs.rip
+                      << "." << std::endl;
         }
         else
         {
             std::cout << "** enter a syscall(" << std::dec << regs.orig_rax
-                      << ") at 0x" << std::hex << regs.rip - 2 << "."
-                      << std::endl;
+                      << ") at 0x" << std::hex << regs.rip << "." << std::endl;
         }
-        entered = !entered;
+        program->entered_syscall = !program->entered_syscall;
     }
     // trapped by a breakpoint
     else

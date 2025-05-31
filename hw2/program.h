@@ -20,11 +20,10 @@ struct program_t
     sdb::auxvs_t auxvs;
 
     breakpoints_t breakpoints;
+    bool entered_syscall = false;
 
     uintptr_t base_address() const;
     uintptr_t entry_point_address() const;
-
-    bool is_running() const;
 };
 
 }  // namespace sdb
