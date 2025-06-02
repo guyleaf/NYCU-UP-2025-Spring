@@ -93,7 +93,8 @@ std::shared_ptr<program_t> load_program_t::execute(
 
     std::cout << "** program '" << path << "' loaded. entry point: 0x"
               << std::hex << program_ptr->entry_point_address() << "."
-              << std::endl;
+              << " base address: 0x" << std::hex << program_ptr->base_address()
+              << "." << std::endl;
 
     // remove the breakpoint, print instructions, and add the breakpoint
     struct user_regs_struct regs;
@@ -287,7 +288,7 @@ std::shared_ptr<program_t> info_regs_t::execute(
 
 void info_regs_t::print_register(std::string name, uintptr_t content) const
 {
-    std::cout << name << "\t0x" << std::hex << std::setfill('0')
+    std::cout << name << "\t0x" << std::hex << std::right << std::setfill('0')
               << std::setw(WORD_SIZE * 2) << content << "\t";
 }
 
