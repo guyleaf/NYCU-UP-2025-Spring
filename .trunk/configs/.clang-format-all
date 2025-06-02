@@ -8,3 +8,10 @@ Language: Cpp
 # PointerAlignment: Left
 BreakBeforeBraces: Allman
 InsertNewlineAtEOF: true
+---
+Language: C
+# Force pointers to the type for C.
+# DerivePointerAlignment: false
+# PointerAlignment: Left
+BreakBeforeBraces: Allman
+InsertNewlineAtEOF: true

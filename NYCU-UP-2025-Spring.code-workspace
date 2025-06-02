@@ -25,6 +25,10 @@
 			{
 				"name": "Linux-lab4",
 				"makeDirectory": "${workspaceFolder}/lab4/chals",
+			},
+			{
+				"name": "Linux-hw2",
+				"makeDirectory": "${workspaceFolder}/hw2",
 			}
 		],
 		"[c]": {
@@ -33,7 +37,7 @@
 			"editor.defaultFormatter": "ms-vscode.cpptools"
 		},
 		"C_Cpp.clang_format_fallbackStyle": "none",
-		"C_Cpp.clang_format_style": "file:${workspaceFolder}/.trunk/configs/.clang-format",
+		"C_Cpp.clang_format_style": "file:${workspaceFolder}/.trunk/configs/.clang-format-all",
 		"files.associations": {
 			".env*": "dotenv",
 			"cmath": "cpp",
@@ -140,7 +144,12 @@
 			"x86.h": "c",
 			"fcntl.h": "c",
 			"signal.h": "c",
-			"sigset_t.h": "c"
-		}
+			"sigset_t.h": "c",
+			"stat.h": "c",
+			"codecvt": "cpp",
+			"list": "cpp",
+			"semaphore": "cpp",
+			"cfenv": "cpp"
+		},
 	}
 }
