@@ -70,7 +70,7 @@ size_t load_maps(pid_t pid, maps_t& loaded)
         if (columns.size() > 5)
         {
             // name
-            entry.name = basename(columns.at(5).data());
+            entry.name = columns.at(5).data();
         }
 
         loaded[entry.range] = std::move(entry);
